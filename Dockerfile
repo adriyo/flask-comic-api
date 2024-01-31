@@ -8,6 +8,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . /app/
 
-EXPOSE 5001
+COPY init.sql /docker-entrypoint-initdb.d/
+
+EXPOSE 5000
 
 CMD ["flask", "run", "--host=0.0.0.0"]

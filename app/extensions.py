@@ -1,5 +1,3 @@
-from supabase import create_client
-from app.config import Config
 from flask_restx import Api
 
 
@@ -8,8 +6,6 @@ api = Api(
     version='1.0',
     description="Testing Comic API",
 )
-
-sb = create_client(Config.SUPABASE_URL, Config.SUPABASE_KEY)
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp'}
 

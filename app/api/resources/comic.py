@@ -1,23 +1,69 @@
+import os
+from flask import jsonify, make_response, g
 from flask_restx import Resource, Namespace
-from ...extensions import sb
+from app.api.auth import auth_required
+
+from app.config import DBManager
+
 from ..models import comicInputParser
 from werkzeug.utils import secure_filename
 from datetime import datetime
 
 ns = Namespace("api")
 
+db_manager = DBManager()
+connection = db_manager.get_connection()
+
 
 @ns.route("/comics")
 class ComicListAPI(Resource):
+    @auth_required
     def get(self):
-        response = sb.table('comics').select("*").execute()
-        return response.data
+        user_id = g.user_id
+        with connection:
+            with connection.cursor() as cursor:
+                query = "SELECT id, title, description, author, published_date, image_cover_url FROM comics WHERE user_id = %s"
+                cursor.execute(query, (user_id,))
+                comics = cursor.fetchall()
+        results = [
+            {
+                'id': comic[0],
+                'title': comic[1],
+                'description': comic[2],
+                'author': comic[3],
+                'published_date': comic[4],
+                'image_cover_url': comic[5],
+            }
+            for comic in comics
+        ]
+
+        return make_response(jsonify(results), 200)
+
+
+@ns.route("/comics/<string:comicId>")
+class ChapterListAPI(Resource):
+    @auth_required
+    def get(self, comicId):
+        with connection:
+            with connection.cursor() as cursor:
+                query = "SELECT id, title FROM comics WHERE id = %s"
+                cursor.execute(query, comicId)
+                comic = cursor.fetchone()
+        if comic == None:
+            return make_response(jsonify({'message': 'comic not found'}), 404)
+        result = {
+            'id': comic[0],
+            'title': comic[1],
+        }
+        return make_response(jsonify(result), 200)
 
 
 @ns.route("/comic")
 class ComicAPI(Resource):
     @ns.expect(comicInputParser)
+    @auth_required
     def post(self):
+        user_id = g.user_id
         args = comicInputParser.parse_args()
 
         title = args['title']
@@ -25,7 +71,7 @@ class ComicAPI(Resource):
         author = args['author']
         published_date = args['published_date']
         status = args['status']
-        image_cover = args['imageCover']
+        image_cover = args['image_cover']
 
         try:
             published_datetime = datetime.strptime(
@@ -33,48 +79,28 @@ class ComicAPI(Resource):
         except Exception as e:
             published_datetime = datetime.date()
 
+        storage_dir = 'storages'
+        if not os.path.exists(storage_dir):
+            os.makedirs(storage_dir)
+
         try:
             filename = secure_filename(image_cover.filename)
-            timestamp = datetime.now().strftime("%d%m%Y%H%M%S")
-            _, extension = filename.rsplit('.', 1)
-
-            imageFile = image_cover.read()
-            path = f'cover/{timestamp}.{extension}'
-
-            sb.storage.from_("upload").upload(
-                file=imageFile, path=path, file_options={"content-type": image_cover.content_type, "cache-control": "3600", "upsert": "true"})
-
-            imagePublicUrl = sb.storage.from_('upload').get_public_url(path)
-            data, count = sb.table("comics") \
-                .insert({
-                    "image_cover_url": imagePublicUrl,
-                    "title": title,
-                    "description": description,
-                    "status": int(status),
-                    "published_date": published_datetime.isoformat(),
-                    "author": author
-                }) \
-                .execute()
-
-            if isinstance(data, tuple) and len(data) > 1 and isinstance(data[1], list):
-                comic_id = data[1][0].get('id', None)
-            else:
-                comic_id = None
-
-            return {"message": "Data received successfully", "data": f'{comic_id}'}
+            image_cover.save(os.path.join(storage_dir, filename))
         except Exception as e:
-            return {"result": f'{e}'}
+            return make_response({"result": f'{e}'}, 400)
 
-
-@ns.route("/comics/<string:comicId>")
-class ChapterListAPI(Resource):
-    def get(self, comicId):
         try:
-            response = sb.table("comics") \
-                .select("*") \
-                .eq("id", comicId) \
-                .execute()
+            filename = secure_filename(image_cover.filename)
+            query = """
+                INSERT INTO comics (title, author, published_date, status, description, image_cover_url, user_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s);
+            """
 
-            return response.data[0]
+            with connection:
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        query, (title, author, published_datetime, status, description, filename, user_id))
+            result = {"message": "Data received successfully"}
+            return make_response(jsonify(result), 201)
         except Exception as e:
-            return {"code": e.code, "message": e.message, "details": e.details, "hint": e.hint}
+            return make_response({"result": f'{e}'}, 400)

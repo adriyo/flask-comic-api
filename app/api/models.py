@@ -13,10 +13,24 @@ comicInputParser.add_argument(
 comicInputParser.add_argument(
     'description', required=True, help='fill the description', location='form')
 comicInputParser.add_argument(
-    'imageCover', required=True, type=FileStorage, location='files')
+    'image_cover', required=True, type=FileStorage, location='files')
 
 chapterInputParser = api.parser()
 chapterInputParser.add_argument(
     'title', required=True, help='chapter title', location='form')
 chapterInputParser.add_argument(
     'images', required=True, type=FileStorage, location='files', action="append")
+
+userRegisterParser = api.parser()
+userRegisterParser.add_argument(
+    'name', required=True, type=str)
+userRegisterParser.add_argument(
+    'email', required=True, type=str)
+userRegisterParser.add_argument(
+    'password', required=True, type=str)
+
+userLoginParser = api.parser()
+userLoginParser.add_argument(
+    'email', required=True, type=str)
+userLoginParser.add_argument(
+    'password', required=True, type=str)
