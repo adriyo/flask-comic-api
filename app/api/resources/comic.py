@@ -3,7 +3,7 @@ from flask import jsonify, make_response, g
 from flask_restx import Resource, Namespace
 from app.api.auth import auth_required
 
-from app.config import DBManager
+from app.config import Config, DBManager
 
 from ..models import comicInputParser
 from werkzeug.utils import secure_filename
@@ -11,9 +11,7 @@ from datetime import datetime
 
 ns = Namespace("api")
 
-db_manager = DBManager()
-connection = db_manager.get_connection()
-
+connection = DBManager().get_connection()
 
 @ns.route("/comics")
 class ComicListAPI(Resource):
@@ -79,7 +77,7 @@ class ComicAPI(Resource):
         except Exception as e:
             published_datetime = datetime.date()
 
-        storage_dir = 'storages'
+        storage_dir = Config.UPLOAD_FOLDER
         if not os.path.exists(storage_dir):
             os.makedirs(storage_dir)
 

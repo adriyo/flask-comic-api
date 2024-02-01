@@ -6,9 +6,7 @@ import bcrypt
 import base64
 ns = Namespace("api")
 
-db_manager = DBManager()
-connection = db_manager.get_connection()
-
+connection = DBManager().get_connection()
 
 @ns.route("/register")
 class RegisterAPI(Resource):
