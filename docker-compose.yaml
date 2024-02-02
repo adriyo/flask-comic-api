@@ -35,8 +35,11 @@ services:
       dockerfile: Dockerfile
     ports:
       - "5000:5000"
+    volumes:
+      - storages:/storages
     depends_on:
       db:
         condition: service_healthy
 volumes:
   db:
+  storages:
