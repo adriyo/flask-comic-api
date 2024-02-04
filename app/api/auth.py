@@ -23,11 +23,14 @@ def auth_required(f):
 
         with connection:
             with connection.cursor() as cursor:
-                query = "SELECT id, email, password FROM users WHERE email = %s"
+                query = "SELECT id, email, password, status FROM users WHERE email = %s"
                 cursor.execute(query, (email,))
                 user = cursor.fetchone()
         if not user:
             return make_response(jsonify({'message': 'invalid account'}), 401)
+        if user[3] == 0:
+            return make_response(jsonify({'message': 'you are not allowed to make changes'}), 401)
+        
         if hashed_pwd == user[2]:
             g.user_id = user[0]
             return f(*args, **kwargs)

@@ -1,16 +1,18 @@
-from flask import jsonify, make_response
-from flask_restx import Resource, Namespace
-from app.config import DBManager
+from flask import jsonify, make_response, render_template, request
+from flask_restx import Namespace, Resource
+from app.config import Config, DBManager, mail
 from ..models import userRegisterParser, userLoginParser
 import bcrypt
 import base64
-ns = Namespace("api")
+from flask_mail import Message
+
+user_ns = Namespace('user', description="user api")
 
 connection = DBManager().get_connection()
 
-@ns.route("/register")
+@user_ns.route("/register")
 class RegisterAPI(Resource):
-    @ns.expect(userRegisterParser)
+    @user_ns.expect(userRegisterParser)
     def post(self):
         args = userRegisterParser.parse_args()
         name = args['name']
@@ -36,17 +38,28 @@ class RegisterAPI(Resource):
                     query, (name, email, hashed_pwd))
         string_token = base64.b64encode(
             f"{email}:{hashed_pwd}".encode('ascii')).decode('utf-8')
+
+        msg = Message(
+            subject='Confirmation',
+            sender=Config.MAIL_USERNAME,
+            recipients=[email]
+        )
+        confirm_url = f'{request.url_root}api/user/confirm/{string_token}'
+        body = render_template('mail_confirmation.html', url_confirmation=confirm_url)
+        msg.html = body
+        mail.send(msg)
+
         result = {
-            'message': 'User registered successfully',
-            'data': {'name': name, 'email': email, 'token': string_token}
+            'message': 'User registered successfully, please check your email for confirmation',
+            'data': {'name': name, 'email': email}
         }
 
         return make_response(jsonify(result), 201)
 
 
-@ns.route("/login")
+@user_ns.route("/login")
 class LoginAPI(Resource):
-    @ns.expect(userLoginParser)
+    @user_ns.expect(userLoginParser)
     def post(self):
         args = userLoginParser.parse_args()
         email = args['email']
@@ -55,12 +68,15 @@ class LoginAPI(Resource):
         password_bytes = password.encode('utf-8')
         with connection:
             with connection.cursor() as cursor:
-                query = "SELECT name, password FROM users WHERE email = %s"
+                query = "SELECT name, password, status FROM users WHERE email = %s"
                 cursor.execute(query, (email,))
                 existing_user = cursor.fetchone()
 
         if not existing_user:
             return make_response(jsonify({'message': 'user not exists'}), 400)
+
+        if existing_user[2] == 0:
+            return make_response(jsonify({'message': 'Check your email for confirmation'}), 400)
 
         existing_password = existing_user[1].encode('utf-8')
         if not bcrypt.checkpw(password_bytes, existing_password):
@@ -74,3 +90,31 @@ class LoginAPI(Resource):
         }
 
         return make_response(jsonify(result), 201)
+
+
+@user_ns.route("/confirm/<token>")
+class UserConfirmAPI(Resource):
+
+    @user_ns.header('Content-Type', 'text/html')
+    def get(self, token):
+        decoded_token = base64.b64decode(token).decode('ascii')
+        email, hashed_pwd = decoded_token.split(':')
+        with connection:
+            with connection.cursor() as cursor:
+                query = "SELECT id, status FROM users WHERE email = %s AND password = %s"
+                cursor.execute(query, (email, hashed_pwd))
+                existing_user = cursor.fetchone()
+    
+                if not existing_user:
+                    return make_response(render_template('message.html', message='user not found'))
+    
+                if existing_user[1]:
+                    return make_response(render_template('message.html', message='user already confirmed'))
+
+                query = "UPDATE users SET status=1 WHERE email = %s AND password = %s"
+                cursor.execute(query, (email, hashed_pwd))
+
+        if cursor.rowcount == 0:
+            return make_response(render_template('message.html', message='confirmation failed'))
+    
+        return make_response(render_template('message.html', message='user confirmed'))

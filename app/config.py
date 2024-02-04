@@ -1,9 +1,16 @@
 import os
+from flask import Flask
 import psycopg2
+from flask_mail import Mail
 
 
 class Config:
     UPLOAD_FOLDER = 'storages'
+    MAIL_SERVER = os.environ['MAIL_SERVER']
+    MAIL_PORT = os.environ['MAIL_PORT']
+    MAIL_USE_SSL = os.environ['MAIL_USE_SSL']
+    MAIL_USERNAME = os.environ['MAIL_USERNAME']
+    MAIL_PASSWORD = os.environ['MAIL_PASSWORD']
 
 
 class DBManager:
@@ -16,3 +23,7 @@ class DBManager:
 
     def get_connection(self):
         return self.conn
+
+app = Flask(__name__)
+app.config.from_object(Config)
+mail = Mail(app)

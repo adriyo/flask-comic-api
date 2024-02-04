@@ -1,6 +1,6 @@
 import os
 from flask import jsonify, make_response, g
-from flask_restx import Resource, Namespace
+from flask_restx import Namespace, Resource
 from app.api.auth import auth_required
 
 from app.config import Config, DBManager
@@ -9,11 +9,12 @@ from ..models import comicInputParser
 from werkzeug.utils import secure_filename
 from datetime import datetime
 
-ns = Namespace("api")
+ns = Namespace('comic')
+comics_ns = Namespace('comics')
 
 connection = DBManager().get_connection()
 
-@ns.route("/comics")
+@comics_ns.route("/")
 class ComicListAPI(Resource):
     @auth_required
     def get(self):
@@ -38,7 +39,7 @@ class ComicListAPI(Resource):
         return make_response(jsonify(results), 200)
 
 
-@ns.route("/comics/<string:comicId>")
+@ns.route("/<string:comicId>")
 class ChapterListAPI(Resource):
     @auth_required
     def get(self, comicId):
@@ -56,7 +57,7 @@ class ChapterListAPI(Resource):
         return make_response(jsonify(result), 200)
 
 
-@ns.route("/comic")
+@ns.route("/")
 class ComicAPI(Resource):
     @ns.expect(comicInputParser)
     @auth_required

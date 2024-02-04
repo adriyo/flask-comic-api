@@ -8,7 +8,9 @@ create table if not exists users (
     id serial primary key,
     name varchar(100) null,
     email varchar(100) unique,
-    password varchar(255) not null,
+    password varchar(255) not null,  
+    status smallint NOT NULL DEFAULT 0,
+    role smallint NOT NULL DEFAULT 0,
     created_at timestamp with time zone not null default now()
 );
 
@@ -46,3 +48,6 @@ create table if not exists authors (
     name varchar(100) null,
     created_at timestamp with time zone not null default now()
 );
+
+COMMENT ON COLUMN users.status IS '0 - waiting confirmation, 1 - confirmed';
+COMMENT ON COLUMN users.role IS '0 - creator, 1 - reader';

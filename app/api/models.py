@@ -1,5 +1,5 @@
 from werkzeug.datastructures import FileStorage
-from ..extensions import api
+from app import api
 
 comicInputParser = api.parser()
 comicInputParser.add_argument(
