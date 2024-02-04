@@ -17,7 +17,7 @@ create table if not exists users (
 create table if not exists comics (
     id serial primary key,
     created_at timestamp with time zone not null default now(),
-    image_cover_url character varying null,
+    image_cover character varying null,
     title character varying null,
     description text null,
     status smallint not null default '0'::smallint,
@@ -31,14 +31,14 @@ create table if not exists comic_chapters (
     id serial primary key,
     comic_id serial not null,
     created_at timestamp with time zone not null default now(),
-    label character varying null,
+    title character varying null,
     constraint comic_chapters_comic_id_fkey foreign key (comic_id) references comics (id) on delete cascade
 );
 
 create table if not exists chapter_images (
     id serial primary key,
     chapter_id serial not null,
-    url text null,
+    image text null,
     created_at timestamp with time zone not null default now(),
     constraint chapter_images_chapter_id_fkey foreign key (chapter_id) references comic_chapters (id) on delete cascade
 );

@@ -5,6 +5,8 @@ from flask_mail import Mail
 
 
 class Config:
+    API_PREFIX = 'api'
+    API_DOC_PREFIX = 'docs'
     UPLOAD_FOLDER = 'storages'
     MAIL_SERVER = os.environ['MAIL_SERVER']
     MAIL_PORT = os.environ['MAIL_PORT']

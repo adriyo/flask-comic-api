@@ -1,5 +1,5 @@
 import os
-from flask import jsonify, make_response, g
+from flask import jsonify, make_response, g, request
 from flask_restx import Namespace, Resource
 from app.api.auth import auth_required
 
@@ -10,33 +10,9 @@ from werkzeug.utils import secure_filename
 from datetime import datetime
 
 ns = Namespace('comic')
-comics_ns = Namespace('comics')
 
 connection = DBManager().get_connection()
 
-@comics_ns.route("/")
-class ComicListAPI(Resource):
-    @auth_required
-    def get(self):
-        user_id = g.user_id
-        with connection:
-            with connection.cursor() as cursor:
-                query = "SELECT id, title, description, author, published_date, image_cover_url FROM comics WHERE user_id = %s"
-                cursor.execute(query, (user_id,))
-                comics = cursor.fetchall()
-        results = [
-            {
-                'id': comic[0],
-                'title': comic[1],
-                'description': comic[2],
-                'author': comic[3],
-                'published_date': comic[4],
-                'image_cover_url': comic[5],
-            }
-            for comic in comics
-        ]
-
-        return make_response(jsonify(results), 200)
 
 
 @ns.route("/<string:comicId>")
@@ -45,7 +21,7 @@ class ChapterListAPI(Resource):
     def get(self, comicId):
         with connection:
             with connection.cursor() as cursor:
-                query = "SELECT id, title FROM comics WHERE id = %s"
+                query = "SELECT id, title, description, author, published_date, status, image_cover FROM comics WHERE id = %s"
                 cursor.execute(query, comicId)
                 comic = cursor.fetchone()
         if comic == None:
@@ -53,6 +29,11 @@ class ChapterListAPI(Resource):
         result = {
             'id': comic[0],
             'title': comic[1],
+            'description': comic[2],
+            'author': comic[3],
+            'published_date': comic[4],
+            'status': comic[5],
+            'image_cover': f'{request.url_root}{Config.API_PREFIX}/{Config.UPLOAD_FOLDER}/{comic[6]}',
         }
         return make_response(jsonify(result), 200)
 
@@ -91,7 +72,7 @@ class ComicAPI(Resource):
         try:
             filename = secure_filename(image_cover.filename)
             query = """
-                INSERT INTO comics (title, author, published_date, status, description, image_cover_url, user_id)
+                INSERT INTO comics (title, author, published_date, status, description, image_cover, user_id)
                 VALUES (%s, %s, %s, %s, %s, %s, %s);
             """
 
