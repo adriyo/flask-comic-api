@@ -33,13 +33,19 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    ports:
-      - "5000:5000"
+    expose:
+      - 5000
     volumes:
       - storages:/storages
     depends_on:
       db:
         condition: service_healthy
+  nginx: 
+    build: ./services/nginx
+    ports: 
+      - 5000:80
+    depends_on:
+      - flask-app
 volumes:
   db:
   storages:

@@ -9,7 +9,7 @@ from ..models import chapterInputParser
 comics_ns = Namespace('comics')
 connection = DBManager().get_connection()
 
-@comics_ns.route("/")
+@comics_ns.route("")
 class ComicListAPI(Resource):
     @auth_required
     def get(self):
