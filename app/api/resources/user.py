@@ -1,3 +1,4 @@
+import os
 from flask import jsonify, make_response, render_template, request
 from flask_restx import Namespace, Resource
 from app.config import Config, DBManager, mail
@@ -38,21 +39,29 @@ class RegisterAPI(Resource):
                     query, (name, email, hashed_pwd))
         string_token = base64.b64encode(
             f"{email}:{hashed_pwd}".encode('ascii')).decode('utf-8')
+        
+        result = None
+        confirm_url = f'{request.headers.get('X-Original-URL')}/{Config.API_PREFIX}/user/confirm/{string_token}'
 
-        msg = Message(
-            subject='Confirmation',
-            sender=Config.MAIL_USERNAME,
-            recipients=[email]
-        )
-        confirm_url = f'{request.url_root}api/user/confirm/{string_token}'
-        body = render_template('mail_confirmation.html', url_confirmation=confirm_url)
-        msg.html = body
-        mail.send(msg)
-
-        result = {
-            'message': 'User registered successfully, please check your email for confirmation',
-            'data': {'name': name, 'email': email}
-        }
+        if os.environ['FLASK_ENV'] == 'production':  
+            msg = Message(
+                subject='Confirmation',
+                sender=Config.MAIL_USERNAME,
+                recipients=[email]
+            )
+            body = render_template('mail_confirmation.html', url_confirmation=confirm_url)
+            msg.html = body
+            mail.send(msg)
+            
+            result = {
+                'message': 'User registered successfully, please check your email for confirmation',
+                'data': {'name': name, 'email': email}
+            }
+        else:
+            result = {
+                'message': 'User registered successfully, please check your email for confirmation',
+                'data': {'name': name, 'email': email, 'confirm_url': confirm_url}
+            }
 
         return make_response(jsonify(result), 201)
 

@@ -27,7 +27,7 @@ class ComicListAPI(Resource):
                 'author': comic[3],
                 'published_date': comic[4],
                 'status': comic[5],
-                'image_cover': f'{request.url_root}{Config.API_PREFIX}/{Config.UPLOAD_FOLDER}/{comic[6]}',
+                'image_cover': f'{request.headers.get('X-Original-URL')}/{Config.API_PREFIX}/{Config.UPLOAD_FOLDER}/{comic[6]}',
             }
             for comic in comics
         ]
