@@ -94,6 +94,23 @@ class DeleteComicAPI(Resource):
         user_id = g.user_id       
         with connection:
             with connection.cursor() as cursor:
+                cursor.execute("SELECT image_cover FROM comics WHERE id = %s AND user_id = %s", (comic_id, user_id))
+                cover_filename = cursor.fetchone()[0]
+                cursor.execute("SELECT image FROM chapter_images WHERE chapter_id IN (SELECT id FROM comic_chapters WHERE comic_id = %s)", (comic_id,))
+                chapter_filenames = cursor.fetchall()
+
+                storage_dir = Config.UPLOAD_FOLDER
+
+                if cover_filename:
+                    cover_path = os.path.join(storage_dir, cover_filename)
+                    if os.path.exists(cover_path):
+                        os.remove(cover_path)
+                for chapter_filename in chapter_filenames:
+                    if chapter_filename:
+                        chapter_path = os.path.join(storage_dir, chapter_filename[0])
+                        if os.path.exists(chapter_path):
+                            os.remove(chapter_path)
+
                 query = "DELETE FROM comics WHERE id = %s AND user_id = %s"
                 cursor.execute(query, (comic_id, user_id))
                 if cursor.rowcount == 0:
