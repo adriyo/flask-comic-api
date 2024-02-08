@@ -84,3 +84,19 @@ class ComicAPI(Resource):
             return make_response(jsonify(result), 201)
         except Exception as e:
             return make_response({"result": f'{e}'}, 400)
+
+
+@ns.route("/<string:comic_id>")
+class DeleteComicAPI(Resource):
+    
+    @auth_required
+    def delete(self, comic_id):
+        user_id = g.user_id       
+        with connection:
+            with connection.cursor() as cursor:
+                query = "DELETE FROM comics WHERE id = %s AND user_id = %s"
+                cursor.execute(query, (comic_id, user_id))
+                if cursor.rowcount == 0:
+                    return make_response(jsonify({'message': 'comic not found'}), 404)
+                else:
+                    return make_response(jsonify({'message': 'comic deleted'}), 200)
