@@ -34,6 +34,35 @@ class ComicListAPI(Resource):
 
         return make_response(jsonify(results), 200)
     
+@comics_ns.route("/<string:comicId>/chapters")
+class ChapterListAPI(Resource):
+    @auth_required
+    def get(self, comicId):
+        user_id = g.user_id
+        with connection:
+            with connection.cursor() as cursor:
+                query = """
+                    SELECT 
+                        comic_chapters.id,
+                        comic_chapters.title
+                    FROM comics
+                    INNER JOIN comic_chapters ON comics.id = comic_chapters.comic_id
+                    WHERE comics.user_id = %s AND comics.id = %s
+                """
+                cursor.execute(query, (user_id, comicId))
+                chapters = cursor.fetchall()
+            
+            if chapters == None:
+                return make_response(jsonify({'message': 'comic not found'}), 404)
+        result = [
+            {
+                'id': chapter[0],
+                'title': chapter[1],
+            }
+            for chapter in chapters
+        ]
+        return make_response(jsonify({'message': 'success', 'data': result}), 200)
+    
 @comics_ns.route("/<string:comicId>/chapter/<string:chapterId>")
 class ComicChapterDetailAPI(Resource):
 
