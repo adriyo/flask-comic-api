@@ -21,6 +21,14 @@ chapterInputParser.add_argument(
 chapterInputParser.add_argument(
     'images', required=True, type=FileStorage, location='files', action="append")
 
+chapterUpdateInputParser = api.parser()
+chapterUpdateInputParser.add_argument(
+    'title', required=True, help='chapter title', location='form')
+chapterUpdateInputParser.add_argument(
+    'images', required=True, type=FileStorage, location='files', action="append")
+chapterUpdateInputParser.add_argument(
+    'image_ids', required=True, type=int, location='form', action="append")
+
 userRegisterParser = api.parser()
 userRegisterParser.add_argument(
     'name', required=True, type=str)

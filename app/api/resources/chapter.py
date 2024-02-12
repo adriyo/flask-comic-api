@@ -4,7 +4,7 @@ from flask_restx import Resource, Namespace
 from werkzeug.utils import secure_filename
 from app.api.auth import auth_required
 from app.config import Config, DBManager
-from ..models import chapterInputParser
+from ..models import chapterInputParser, chapterUpdateInputParser
 
 comics_ns = Namespace('comics')
 connection = DBManager().get_connection()
@@ -131,4 +131,48 @@ class ChapterImagesAPI(Resource):
                 except Exception as e:
                     return make_response({"message": f'{e}'}, 400)
                 
+        return make_response(jsonify({'message': 'success'}), 200)
+    
+    
+@comics_ns.route("/<string:comicId>/chapter/<string:chapterId>")
+class ChapterUpdateAPI(Resource):
+    @comics_ns.expect(chapterUpdateInputParser)
+    @auth_required
+    def put(self, comicId, chapterId):    
+        user_id = g.user_id
+        args = chapterUpdateInputParser.parse_args()
+
+        title = args['title']
+        images = args['images']
+        image_ids = args['image_ids']
+
+        storage_dir = Config.UPLOAD_FOLDER
+        if not os.path.exists(storage_dir):
+            os.makedirs(storage_dir)
+
+        with connection:
+            with connection.cursor() as cursor:
+                query = "SELECT c.id FROM comics c INNER JOIN comic_chapters ch ON c.id = ch.comic_id WHERE c.id = %s AND c.user_id = %s AND ch.id = %s"
+                cursor.execute(query, (comicId, user_id, chapterId))
+                existing_chapter = cursor.fetchone()
+
+                if existing_chapter is None:
+                    return make_response(jsonify({'message': 'comic chapter not found'}), 404)
+
+                try:
+                    query = "UPDATE comic_chapters SET title = %s WHERE id = %s"
+                    cursor.execute(query, (title, chapterId))
+
+                    for image, image_id in zip(images, image_ids):
+                        filename = secure_filename(image.filename)
+                        query = "UPDATE chapter_images SET image = %s WHERE id = %s AND chapter_id = %s"
+                        cursor.execute(query, (filename, image_id, chapterId))
+                        
+                        if cursor.rowcount == 0:
+                            return make_response(jsonify({'message': 'failed to update image'}), 404)
+
+                        image.save(os.path.join(storage_dir, filename)) 
+                except Exception as e:
+                    return make_response({"message": f'{e}'}, 400)
+
         return make_response(jsonify({'message': 'success'}), 200)
