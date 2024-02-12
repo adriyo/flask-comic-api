@@ -15,6 +15,20 @@ comicInputParser.add_argument(
 comicInputParser.add_argument(
     'image_cover', required=True, type=FileStorage, location='files')
 
+comicUpdateInputParser = api.parser()
+comicUpdateInputParser.add_argument(
+    'title', required=False, help='comic title', location='form')
+comicUpdateInputParser.add_argument(
+    'author', required=False, help='comic author', location='form')
+comicUpdateInputParser.add_argument(
+    'published_date', required=False, location='form', type=str)
+comicUpdateInputParser.add_argument(
+    'status', required=False, location='form', type=str)
+comicUpdateInputParser.add_argument(
+    'description', required=False, help='fill the description', location='form')
+comicUpdateInputParser.add_argument(
+    'image_cover', required=False, type=FileStorage, location='files')
+
 chapterInputParser = api.parser()
 chapterInputParser.add_argument(
     'title', required=True, help='chapter title', location='form')

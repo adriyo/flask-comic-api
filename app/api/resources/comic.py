@@ -5,7 +5,7 @@ from app.api.auth import auth_required
 
 from app.config import Config, DBManager
 
-from ..models import comicInputParser
+from ..models import comicInputParser, comicUpdateInputParser
 from werkzeug.utils import secure_filename
 from datetime import datetime
 
@@ -36,6 +36,81 @@ class ChapterListAPI(Resource):
             'image_cover': f'{request.headers.get('X-Original-URL')}/{Config.API_PREFIX}/{Config.UPLOAD_FOLDER}/{comic[6]}',
         }
         return make_response(jsonify(result), 200)
+    
+    @ns.expect(comicUpdateInputParser)
+    @auth_required
+    def put(self, comicId):
+        user_id = g.user_id
+        args = comicUpdateInputParser.parse_args()
+
+        title = args['title']
+        description = args['description']
+        author = args['author']
+        published_date = args['published_date']
+        status = args['status']
+        image_cover = args['image_cover']
+
+        if all(value is None for value in args.values()):
+            return make_response(jsonify({'message': 'No fields provided for update'}), 400)
+
+
+        with connection:
+            with connection.cursor() as cursor:
+                query = "SELECT id FROM comics WHERE id = %s and user_id = %s"
+                cursor.execute(query, (comicId, user_id))
+                comic = cursor.fetchone()
+        
+                if comic == None:
+                    return make_response(jsonify({'message': 'comic not found'}), 404)
+                
+                storage_dir = Config.UPLOAD_FOLDER
+                if not os.path.exists(storage_dir):
+                    os.makedirs(storage_dir)
+
+                filename = None
+                if 'image_cover' in request.files:
+                    try:
+                        filename = secure_filename(image_cover.filename)
+                        image_cover.save(os.path.join(storage_dir, filename))
+                    except Exception as e:
+                        return make_response({"result": f'{e}'}, 400)
+                
+                update_fields = []
+                update_values = []
+                if 'title' in args and title:
+                    update_fields.append("title = %s")
+                    update_values.append(title)
+                if 'description' in args and description:
+                    update_fields.append("description = %s")
+                    update_values.append(description)
+                if 'author' in args and author:
+                    update_fields.append("author = %s")
+                    update_values.append(author)
+                if 'published_date' in args and published_date:
+                    update_fields.append("published_date = %s")
+                    update_values.append(published_date)
+                if 'status' in args and status:
+                    update_fields.append("status = %s")
+                    update_values.append(status)
+                if filename:
+                    update_fields.append("image_cover = %s")
+                    update_values.append(filename)
+                
+                update_values.append(comicId)
+
+                set_clause = ', '.join(update_fields)                
+
+                query = f"""
+                    UPDATE comics
+                    SET {set_clause}
+                    WHERE id = %s
+                """
+                cursor.execute(query, tuple(update_values))
+
+                if cursor.rowcount == 0:
+                    return make_response(jsonify({'message': 'update failed'}), 400)
+
+        return make_response(jsonify({'message': 'success'}), 200)
 
 
 @ns.route("/")
