@@ -1,8 +1,8 @@
-##Comic Management API
+## Comic Management API
 
 A sample Flask and PostgreSQL project designed for learning how to create a simple CRUD API using python. This project will be integrated into another repository for the frontend, serving the purpose of managing comics uploaded by users.
 
-##Packages
+## Packages
 - **Flask**
 - **Flask Restx**
 - **PostgreSQL**
