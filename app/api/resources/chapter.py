@@ -1,4 +1,5 @@
 import os
+import sys
 from flask import jsonify, make_response, g, request
 from flask_restx import Resource, Namespace
 from werkzeug.utils import secure_filename
@@ -14,10 +15,18 @@ class ComicListAPI(Resource):
     @auth_required
     def get(self):
         user_id = g.user_id
+        page = max(1, request.args.get('page', default=1, type=int))
+        limit = request.args.get('limit', default=10, type=int)
+
         with connection:
             with connection.cursor() as cursor:
-                query = "SELECT id, title, description, author, published_date, status, image_cover FROM comics WHERE user_id = %s"
-                cursor.execute(query, (user_id,))
+                query = """
+                SELECT id, title, description, author, published_date, status, image_cover
+                FROM comics WHERE user_id = %s
+                LIMIT %s OFFSET %s
+                """
+                offset = (page - 1) * limit
+                cursor.execute(query, (user_id, limit, offset))
                 comics = cursor.fetchall()
         results = [
             {
