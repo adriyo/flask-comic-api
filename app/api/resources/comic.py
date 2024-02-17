@@ -2,7 +2,7 @@ import os
 from flask import jsonify, make_response, g, request
 from flask_restx import Namespace, Resource
 from app.api.auth import auth_required
-
+import requests
 from app.config import Config, DBManager
 
 from ..models import comicInputParser, comicUpdateInputParser
@@ -13,6 +13,7 @@ ns = Namespace('comic')
 
 connection = DBManager().get_connection()
 
+STORAGE_SERVICE_URL = "http://storage-service:8080/upload"  # Update with the actual URL of your storage service
 
 
 @ns.route("/<string:comicId>")
@@ -134,18 +135,18 @@ class ComicAPI(Resource):
         except Exception as e:
             published_datetime = datetime.date()
 
-        storage_dir = Config.UPLOAD_FOLDER
-        if not os.path.exists(storage_dir):
-            os.makedirs(storage_dir)
-
         try:
-            filename = secure_filename(image_cover.filename)
-            image_cover.save(os.path.join(storage_dir, filename))
-        except Exception as e:
-            return make_response({"result": f'{e}'}, 400)
+            filename = ''
+            if image_cover != None:
+                try:
+                    filename = secure_filename(image_cover.filename)
+                except Exception as e:
+                    return make_response({"result": f'{e}'}, 400)
 
-        try:
-            filename = secure_filename(image_cover.filename)
+                response = requests.post(STORAGE_SERVICE_URL, files={"file": (filename, image_cover)})
+                if response.status_code != 200:
+                    return make_response({"result": "Failed to upload image"}, 400)
+
             query = """
                 INSERT INTO comics (title, author, published_date, status, description, image_cover, user_id)
                 VALUES (%s, %s, %s, %s, %s, %s, %s);
