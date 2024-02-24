@@ -3,6 +3,7 @@ from flask import jsonify, make_response, g, request
 from flask_restx import Namespace, Resource
 from app.api.auth import auth_required
 import requests
+from app.api.resources.helper import parse_published_date
 from app.config import Config, DBManager
 
 from ..models import comicInputParser, comicUpdateInputParser
@@ -13,7 +14,8 @@ ns = Namespace('comic')
 
 connection = DBManager().get_connection()
 
-STORAGE_SERVICE_URL = "http://storage-service:8080/upload"  # Update with the actual URL of your storage service
+STORAGE_SERVICE_URL = "http://storage-service:8080/upload" 
+STORAGE_SERVICE_SAVE_URL = "http://storage-service:8080/save"
 
 
 @ns.route("/<string:comicId>")
@@ -113,7 +115,6 @@ class ChapterListAPI(Resource):
 
         return make_response(jsonify({'message': 'success'}), 200)
 
-
 @ns.route("")
 class ComicAPI(Resource):
     @ns.expect(comicInputParser)
@@ -128,11 +129,9 @@ class ComicAPI(Resource):
         published_date = args['published_date']
         status = args['status']
         image_cover = args['image_cover']
+        published_datetime = parse_published_date(published_date)
 
-        try:
-            published_datetime = datetime.strptime(
-                published_date, "%Y-%m-%d").date()
-        except Exception as e:
+        if published_datetime is None:
             published_datetime = datetime.date()
 
         try:
@@ -160,6 +159,66 @@ class ComicAPI(Resource):
             return make_response(jsonify(result), 201)
         except Exception as e:
             return make_response({"result": f'{e}'}, 400)
+
+@ns.route("/bulk")
+class ComicBulkAPI(Resource):
+    @auth_required
+    def post(self):
+        user_id = g.user_id
+        file_data = request.get_array(field_name='file')
+        comics_to_insert = []
+
+        if len(file_data) == 0 or len(file_data) == 1:
+            return make_response({"result": "No data provided"}, 400)
+        
+        data = file_data[1:]
+
+        for comic_data in data:
+            title = comic_data[0]
+            if not title:
+                continue
+            
+            author = comic_data[1]
+            published_date = comic_data[2]
+            status = comic_data[3]
+            description = comic_data[4]
+            image_url = comic_data[5]
+            published_datetime = parse_published_date(published_date)
+
+            if published_datetime is None:
+               return make_response({"result": "Invalid published date format"}, 400)
+
+            filename = None
+            if image_url:
+                try:
+                    response = requests.post(STORAGE_SERVICE_SAVE_URL, json={"url": image_url})
+                    if response.status_code != 200:
+                        return make_response({"result": "Failed to download image"}, 400)
+                    filename = response.json()["filename"]
+                except Exception as e:
+                    return make_response({"result": f'Error: {e}'}, 400)
+
+            comics_to_insert.append((title, author, published_datetime, status, description, filename, user_id))
+
+        try:            
+            with connection:
+                with connection.cursor() as cursor:
+                    query = """
+                        INSERT INTO comics (title, author, published_date, status, description, image_cover, user_id)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s);
+                    """
+                    cursor.executemany(query, comics_to_insert)
+            result = {"message": "Data received successfully"}
+            return make_response(jsonify(result), 201)
+        except Exception as e:
+            return make_response({"result": f'{e}'}, 400)
+
+@ns.route("/bulk-check")
+class ComicBulkCheckAPI(Resource):
+    @auth_required
+    def post(self):
+        file_data = request.get_array(field_name='file')
+        return make_response(jsonify(file_data))
 
 
 @ns.route("/<string:comic_id>")

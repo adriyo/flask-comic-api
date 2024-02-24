@@ -2,6 +2,7 @@ import os
 from flask import Flask
 import psycopg2
 from flask_mail import Mail
+import flask_excel as excel
 
 
 class Config:
@@ -29,4 +30,5 @@ class DBManager:
 
 app = Flask(__name__)
 app.config.from_object(Config)
+excel.init_excel(app)
 mail = Mail(app)
