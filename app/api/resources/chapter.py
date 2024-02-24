@@ -12,6 +12,11 @@ connection = DBManager().get_connection()
 
 @comics_ns.route("")
 class ComicListAPI(Resource):
+    def get_image_url(self, filename):
+        if filename:
+            return f'{request.headers.get("X-Original-URL")}/{Config.API_PREFIX}/{Config.UPLOAD_FOLDER}/{filename}'
+        return Config.NO_IMAGE_URL
+
     @auth_required
     def get(self):
         user_id = g.user_id
@@ -36,7 +41,7 @@ class ComicListAPI(Resource):
                 'author': comic[3],
                 'published_date': comic[4],
                 'status': comic[5],
-                'image_cover': f'{request.headers.get('X-Original-URL')}/{Config.API_PREFIX}/{Config.UPLOAD_FOLDER}/{comic[6]}',
+                'image_cover': self.get_image_url(comic[6]),
             }
             for comic in comics
         ]

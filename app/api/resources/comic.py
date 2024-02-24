@@ -114,7 +114,7 @@ class ChapterListAPI(Resource):
         return make_response(jsonify({'message': 'success'}), 200)
 
 
-@ns.route("/")
+@ns.route("")
 class ComicAPI(Resource):
     @ns.expect(comicInputParser)
     @auth_required

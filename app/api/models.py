@@ -13,7 +13,7 @@ comicInputParser.add_argument(
 comicInputParser.add_argument(
     'description', required=True, help='fill the description', location='form')
 comicInputParser.add_argument(
-    'image_cover', required=True, type=FileStorage, location='files')
+    'image_cover', type=FileStorage, location='files')
 
 comicUpdateInputParser = api.parser()
 comicUpdateInputParser.add_argument(

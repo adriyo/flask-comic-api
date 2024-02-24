@@ -13,6 +13,7 @@ class Config:
     MAIL_USE_SSL = os.environ['MAIL_USE_SSL']
     MAIL_USERNAME = os.environ['MAIL_USERNAME']
     MAIL_PASSWORD = os.environ['MAIL_PASSWORD']
+    NO_IMAGE_URL = 'https://via.placeholder.com/200x200?text=NOT%20FOUND'
 
 
 class DBManager:
