@@ -43,7 +43,7 @@ class RegisterAPI(Resource):
         result = None
         confirm_url = f'{request.headers.get('X-Original-URL')}/{Config.API_PREFIX}/user/confirm/{string_token}'
 
-        if os.environ['FLASK_ENV'] == 'production':  
+        if os.environ.get('FLASK_ENV') == 'production':  
             msg = Message(
                 subject='Confirmation',
                 sender=Config.MAIL_USERNAME,

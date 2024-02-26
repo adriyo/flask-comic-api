@@ -1,14 +1,15 @@
 import os
 from flask import jsonify, make_response, g, request
 from flask_restx import Namespace, Resource
+from psycopg2 import DatabaseError 
 from app.api.auth import auth_required
 import requests
+from app.api.resources.converter import get_comic_status, get_comic_type, get_image_url
 from app.api.resources.helper import parse_published_date
 from app.config import Config, DBManager
 
 from ..models import comicInputParser, comicUpdateInputParser
 from werkzeug.utils import secure_filename
-from datetime import datetime
 
 ns = Namespace('comic')
 
@@ -18,14 +19,14 @@ STORAGE_SERVICE_URL = "http://storage-service:8080/upload"
 STORAGE_SERVICE_SAVE_URL = "http://storage-service:8080/save"
 
 
-@ns.route("/<string:comicId>")
+@ns.route("/<string:comic_id>")
 class ChapterListAPI(Resource):
     @auth_required
-    def get(self, comicId):
+    def get(self, comic_id):
         with connection:
             with connection.cursor() as cursor:
-                query = "SELECT id, title, description, author, published_date, status, image_cover FROM comics WHERE id = %s"
-                cursor.execute(query, comicId)
+                query = "SELECT id, title, description, published_date, status, type, image_cover FROM comics WHERE id = %s"
+                cursor.execute(query, comic_id)
                 comic = cursor.fetchone()
         if comic == None:
             return make_response(jsonify({'message': 'comic not found'}), 404)
@@ -33,87 +34,120 @@ class ChapterListAPI(Resource):
             'id': comic[0],
             'title': comic[1],
             'description': comic[2],
-            'author': comic[3],
-            'published_date': comic[4],
-            'status': comic[5],
-            'image_cover': f'{request.headers.get('X-Original-URL')}/{Config.API_PREFIX}/{Config.UPLOAD_FOLDER}/{comic[6]}',
+            'published_date': comic[3],
+            'status': get_comic_status(comic[4]),
+            'type': get_comic_type(comic[5]),
+            'image_cover': get_image_url(request, comic[6]),
         }
         return make_response(jsonify(result), 200)
     
     @ns.expect(comicUpdateInputParser)
     @auth_required
-    def put(self, comicId):
+    def put(self, comic_id):
         user_id = g.user_id
         args = comicUpdateInputParser.parse_args()
 
         title = args['title']
+        alternative_title = args['alternative_title']
         description = args['description']
-        author = args['author']
         published_date = args['published_date']
         status = args['status']
+        comic_type = args['type']
         image_cover = args['image_cover']
+        authors = args['authors']
+        artists = args['artists']
+        tags = args['tags']
+        translators = args['translators']
+        genres = args['genres']
+        published_datetime = parse_published_date(published_date)
 
         if all(value is None for value in args.values()):
             return make_response(jsonify({'message': 'No fields provided for update'}), 400)
 
-
-        with connection:
-            with connection.cursor() as cursor:
-                query = "SELECT id FROM comics WHERE id = %s and user_id = %s"
-                cursor.execute(query, (comicId, user_id))
-                comic = cursor.fetchone()
-        
-                if comic == None:
-                    return make_response(jsonify({'message': 'comic not found'}), 404)
-                
-                storage_dir = Config.UPLOAD_FOLDER
-                if not os.path.exists(storage_dir):
-                    os.makedirs(storage_dir)
-
-                filename = None
-                if 'image_cover' in request.files:
-                    try:
+        try:
+            with connection:
+                with connection.cursor() as cursor:
+                    query = "SELECT id FROM comics WHERE id = %s and user_id = %s"
+                    cursor.execute(query, (comic_id, user_id))
+                    comic = cursor.fetchone()
+            
+                    if comic == None:
+                        return make_response(jsonify({'message': 'comic not found'}), 404)
+                    
+                    filename = ''
+                    if 'image_cover' in request.files:
                         filename = secure_filename(image_cover.filename)
-                        image_cover.save(os.path.join(storage_dir, filename))
-                    except Exception as e:
-                        return make_response({"result": f'{e}'}, 400)
-                
-                update_fields = []
-                update_values = []
-                if 'title' in args and title:
-                    update_fields.append("title = %s")
-                    update_values.append(title)
-                if 'description' in args and description:
-                    update_fields.append("description = %s")
-                    update_values.append(description)
-                if 'author' in args and author:
-                    update_fields.append("author = %s")
-                    update_values.append(author)
-                if 'published_date' in args and published_date:
-                    update_fields.append("published_date = %s")
-                    update_values.append(published_date)
-                if 'status' in args and status:
-                    update_fields.append("status = %s")
-                    update_values.append(status)
-                if filename:
-                    update_fields.append("image_cover = %s")
-                    update_values.append(filename)
-                
-                update_values.append(comicId)
+                        response = requests.post(STORAGE_SERVICE_URL, files={"file": (filename, image_cover)})
+                        if response.status_code != 200:
+                            return make_response({"result": "Failed to upload image"}, 400)
+                    
+                    update_fields = []
+                    update_values = []
+                    if title:
+                        update_fields.append("title = %s")
+                        update_values.append(title)
+                    if title:
+                        update_fields.append("alternative_title = %s")
+                        update_values.append(alternative_title)
+                    if description:
+                        update_fields.append("description = %s")
+                        update_values.append(description)
+                    if published_datetime:
+                        update_fields.append("published_date = %s")
+                        update_values.append(published_datetime)
+                    if status:
+                        update_fields.append("status = %s")
+                        update_values.append(status)
+                    if comic_type:
+                        update_fields.append("type = %s")
+                        update_values.append(comic_type)
+                    if filename:
+                        update_fields.append("image_cover = %s")
+                        update_values.append(filename)
+                    
+                    update_values.append(comic_id)
 
-                set_clause = ', '.join(update_fields)                
+                    set_clause = ', '.join(update_fields)                
 
-                query = f"""
-                    UPDATE comics
-                    SET {set_clause}
-                    WHERE id = %s
-                """
-                cursor.execute(query, tuple(update_values))
+                    query = f"""
+                        UPDATE comics
+                        SET {set_clause}
+                        WHERE id = %s
+                    """
+                    cursor.execute(query, tuple(update_values))
 
-                if cursor.rowcount == 0:
-                    return make_response(jsonify({'message': 'update failed'}), 400)
+                    if genres:
+                        cursor.execute("DELETE FROM comic_genres WHERE comic_id = %s", (comic_id,))
+                        genre_values = [(comic_id, genre_id) for genre_id in genres]
+                        cursor.executemany("INSERT INTO comic_genres (comic_id, genre_id) VALUES (%s, %s)", genre_values)
 
-        return make_response(jsonify({'message': 'success'}), 200)
+                    if authors:
+                        cursor.execute("DELETE FROM comic_authors WHERE comic_id = %s", (comic_id,))
+                        author_values = [(comic_id, author_id) for author_id in authors]
+                        cursor.executemany("INSERT INTO comic_authors (comic_id, author_id) VALUES (%s, %s)", author_values)
+                    
+                    if artists:
+                        cursor.execute("DELETE FROM comic_artists WHERE comic_id = %s", (comic_id,))
+                        artist_values = [(comic_id, artist_id) for artist_id in artists]
+                        cursor.executemany("INSERT INTO comic_artists (comic_id, artist_id) VALUES (%s, %s)", artist_values)
+
+                    if tags:
+                        cursor.execute("DELETE FROM comic_tags WHERE comic_id = %s", (comic_id,))
+                        tag_values = [(comic_id, tag_id) for tag_id in tags]
+                        cursor.executemany("INSERT INTO comic_tags (comic_id, tag_id) VALUES (%s, %s)", tag_values)
+
+                    if translators:
+                        cursor.execute("DELETE FROM comic_translators WHERE comic_id = %s", (comic_id,))
+                        translator_values = [(comic_id, translator_id) for translator_id in translators]
+                        cursor.executemany("INSERT INTO comic_translators (comic_id, translator_id) VALUES (%s, %s)", translator_values)
+                    
+                    connection.commit()
+        
+            return make_response(jsonify({'message': 'update success'}), 200)
+        except (Exception, DatabaseError) as error:
+            if connection:
+                connection.rollback()
+            return make_response(jsonify({'message': f'update failed {error}'}), 400)    
 
 @ns.route("")
 class ComicAPI(Resource):
@@ -124,40 +158,66 @@ class ComicAPI(Resource):
         args = comicInputParser.parse_args()
 
         title = args['title']
+        alternative_title = args['alternative_title']
         description = args['description']
-        author = args['author']
         published_date = args['published_date']
         status = args['status']
+        comic_type = args['type']
         image_cover = args['image_cover']
+        authors = args['authors']
+        artists = args['artists']
+        tags = args['tags']
+        translators = args['translators']
+        genres = args['genres']
         published_datetime = parse_published_date(published_date)
-
-        if published_datetime is None:
-            published_datetime = datetime.date()
 
         try:
             filename = ''
             if image_cover != None:
-                try:
-                    filename = secure_filename(image_cover.filename)
-                except Exception as e:
-                    return make_response({"result": f'{e}'}, 400)
+                filename = secure_filename(image_cover.filename)
 
                 response = requests.post(STORAGE_SERVICE_URL, files={"file": (filename, image_cover)})
                 if response.status_code != 200:
                     return make_response({"result": "Failed to upload image"}, 400)
 
             query = """
-                INSERT INTO comics (title, author, published_date, status, description, image_cover, user_id)
-                VALUES (%s, %s, %s, %s, %s, %s, %s);
+                INSERT INTO comics (title, alternative_title, description, published_date, status, type, image_cover, user_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id;
             """
 
             with connection:
                 with connection.cursor() as cursor:
                     cursor.execute(
-                        query, (title, author, published_datetime, status, description, filename, user_id))
+                        query, (title, alternative_title, description, published_datetime, status, comic_type, filename, user_id))
+                    comic_id = cursor.fetchone()[0]
+
+                    if genres:
+                        genre_values = [(comic_id, genre_id) for genre_id in genres]
+                        cursor.executemany("INSERT INTO comic_genres (comic_id, genre_id) VALUES (%s, %s)", genre_values)
+
+                    if authors:
+                        author_values = [(comic_id, author_id) for author_id in authors]
+                        cursor.executemany("INSERT INTO comic_authors (comic_id, author_id) VALUES (%s, %s)", author_values)
+                    
+                    if artists:
+                        artist_values = [(comic_id, artist_id) for artist_id in artists]
+                        cursor.executemany("INSERT INTO comic_artists (comic_id, artist_id) VALUES (%s, %s)", artist_values)
+
+                    if tags:
+                        tag_values = [(comic_id, tag_id) for tag_id in tags]
+                        cursor.executemany("INSERT INTO comic_tags (comic_id, tag_id) VALUES (%s, %s)", tag_values)
+
+                    if translators:
+                        translator_values = [(comic_id, translator_id) for translator_id in translators]
+                        cursor.executemany("INSERT INTO comic_translators (comic_id, translator_id) VALUES (%s, %s)", translator_values)
+
+                    connection.commit()
             result = {"message": "Data received successfully"}
             return make_response(jsonify(result), 201)
         except Exception as e:
+            if connection:
+                connection.rollback()
             return make_response({"result": f'{e}'}, 400)
 
 @ns.route("/bulk")
@@ -178,15 +238,18 @@ class ComicBulkAPI(Resource):
             if not title:
                 continue
             
-            author = comic_data[1]
+            alternative_title = comic_data[1]
             published_date = comic_data[2]
             status = comic_data[3]
-            description = comic_data[4]
-            image_url = comic_data[5]
-            published_datetime = parse_published_date(published_date)
+            comic_type = comic_data[4]
+            description = comic_data[5]
+            image_url = comic_data[6]
 
-            if published_datetime is None:
-               return make_response({"result": "Invalid published date format"}, 400)
+            if published_date:
+                published_datetime = parse_published_date(published_date)
+
+                if published_datetime is None:
+                   return make_response({"result": "Invalid published date format"}, 400)
 
             filename = None
             if image_url:
@@ -198,19 +261,22 @@ class ComicBulkAPI(Resource):
                 except Exception as e:
                     return make_response({"result": f'Error: {e}'}, 400)
 
-            comics_to_insert.append((title, author, published_datetime, status, description, filename, user_id))
+            comics_to_insert.append((title, alternative_title, published_datetime, status, comic_type, description, filename, user_id))
 
         try:            
             with connection:
                 with connection.cursor() as cursor:
                     query = """
-                        INSERT INTO comics (title, author, published_date, status, description, image_cover, user_id)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s);
+                        INSERT INTO comics (title, alternative_title, published_date, status, type, description, image_cover, user_id)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
                     """
                     cursor.executemany(query, comics_to_insert)
+                    connection.commit()
             result = {"message": "Data received successfully"}
             return make_response(jsonify(result), 201)
         except Exception as e:
+            if connection:
+                connection.rollback()
             return make_response({"result": f'{e}'}, 400)
 
 @ns.route("/bulk-check")

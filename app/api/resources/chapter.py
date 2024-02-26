@@ -4,6 +4,7 @@ from flask import jsonify, make_response, g, request
 from flask_restx import Resource, Namespace
 from werkzeug.utils import secure_filename
 from app.api.auth import auth_required
+from app.api.resources.converter import get_comic_status, get_comic_type, get_image_url
 from app.config import Config, DBManager
 from ..models import chapterInputParser, chapterUpdateInputParser
 
@@ -12,10 +13,6 @@ connection = DBManager().get_connection()
 
 @comics_ns.route("")
 class ComicListAPI(Resource):
-    def get_image_url(self, filename):
-        if filename:
-            return f'{request.headers.get("X-Original-URL")}/{Config.API_PREFIX}/{Config.UPLOAD_FOLDER}/{filename}'
-        return Config.NO_IMAGE_URL
 
     @auth_required
     def get(self):
@@ -26,7 +23,7 @@ class ComicListAPI(Resource):
         with connection:
             with connection.cursor() as cursor:
                 query = """
-                SELECT id, title, description, author, published_date, status, image_cover
+                SELECT id, title, description, published_date, status, type, image_cover
                 FROM comics WHERE user_id = %s
                 LIMIT %s OFFSET %s
                 """
@@ -38,10 +35,10 @@ class ComicListAPI(Resource):
                 'id': comic[0],
                 'title': comic[1],
                 'description': comic[2],
-                'author': comic[3],
-                'published_date': comic[4],
-                'status': comic[5],
-                'image_cover': self.get_image_url(comic[6]),
+                'published_date': comic[3],
+                'status': get_comic_status(comic[4]),
+                'type': get_comic_type(comic[5]),
+                'image_cover': get_image_url(request, comic[6]),
             }
             for comic in comics
         ]
