@@ -4,6 +4,7 @@ from flask_restx import Namespace, Resource
 from psycopg2 import DatabaseError 
 from app.api.auth import auth_required
 import requests
+from app.api.constants import STORAGE_SERVICE_SAVE_URL, STORAGE_SERVICE_UPLOAD_URL
 from app.api.resources.converter import get_comic_status, get_comic_type, get_image_url
 from app.api.resources.helper import parse_published_date
 from app.config import Config, DBManager
@@ -14,10 +15,6 @@ from werkzeug.utils import secure_filename
 ns = Namespace('comic')
 
 connection = DBManager().get_connection()
-
-STORAGE_SERVICE_URL = "http://storage-service:8080/upload" 
-STORAGE_SERVICE_SAVE_URL = "http://storage-service:8080/save"
-
 
 @ns.route("/<string:comic_id>")
 class ChapterListAPI(Resource):
@@ -77,7 +74,7 @@ class ChapterListAPI(Resource):
                     filename = ''
                     if 'image_cover' in request.files:
                         filename = secure_filename(image_cover.filename)
-                        response = requests.post(STORAGE_SERVICE_URL, files={"file": (filename, image_cover)})
+                        response = requests.post(STORAGE_SERVICE_UPLOAD_URL, files={"file": (filename, image_cover)})
                         if response.status_code != 200:
                             return make_response({"result": "Failed to upload image"}, 400)
                     
@@ -176,7 +173,7 @@ class ComicAPI(Resource):
             if image_cover != None:
                 filename = secure_filename(image_cover.filename)
 
-                response = requests.post(STORAGE_SERVICE_URL, files={"file": (filename, image_cover)})
+                response = requests.post(STORAGE_SERVICE_UPLOAD_URL, files={"file": (filename, image_cover)})
                 if response.status_code != 200:
                     return make_response({"result": "Failed to upload image"}, 400)
 

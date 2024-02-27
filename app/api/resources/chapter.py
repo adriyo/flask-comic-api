@@ -1,11 +1,12 @@
 import os
-import sys
 from flask import jsonify, make_response, g, request
 from flask_restx import Resource, Namespace
 from werkzeug.utils import secure_filename
 from app.api.auth import auth_required
+from app.api.constants import STORAGE_SERVICE_UPLOAD_URL
 from app.api.resources.converter import get_comic_status, get_comic_type, get_image_url
 from app.config import Config, DBManager
+import requests
 from ..models import chapterInputParser, chapterUpdateInputParser
 
 comics_ns = Namespace('comics')
@@ -138,27 +139,20 @@ class ChapterImagesAPI(Resource):
         title = args['title']
         images = args['images']
 
-        storage_dir = Config.UPLOAD_FOLDER
-        if not os.path.exists(storage_dir):
-            os.makedirs(storage_dir)
+        try:
+            with connection:
+                with connection.cursor() as cursor:
+                    query = "SELECT id FROM comics WHERE id = %s AND user_id = %s"
+                    cursor.execute(query, (comicId, user_id))
+                    existing_comic = cursor.fetchone()
 
-        with connection:
-            with connection.cursor() as cursor:
-                query = "SELECT id FROM comics WHERE id = %s AND user_id = %s"
-                cursor.execute(query, (comicId, user_id))
-                existing_comic = cursor.fetchone()
+                    if existing_comic == None:
+                        return make_response(jsonify({'message': 'comic not found'}), 404)
+                    
+                    query = "INSERT INTO comic_chapters (title, comic_id) VALUES (%s, %s) RETURNING id"
+                    cursor.execute(query, (title, comicId))
+                    last_chapter_id = cursor.fetchone()[0]
 
-                if existing_comic == None:
-                    return make_response(jsonify({'message': 'comic not found'}), 404)
-                
-                query = "INSERT INTO comic_chapters (title, comic_id) VALUES (%s, %s) RETURNING id"
-                cursor.execute(query, (title, comicId))
-                last_chapter_id = cursor.fetchone()[0]
-
-                if cursor.rowcount == 0:
-                    return make_response(jsonify({'message': 'chapter not found'}), 404)
-
-                try:
                     for image in images:
                         filename = secure_filename(image.filename)
                         query = "INSERT INTO chapter_images (chapter_id, image) VALUES (%s, %s)"
@@ -167,12 +161,15 @@ class ChapterImagesAPI(Resource):
                         if cursor.rowcount == 0:
                             return make_response(jsonify({'message': 'failed to upload'}), 404)
 
-                        image.save(os.path.join(storage_dir, filename)) 
-                except Exception as e:
-                    return make_response({"message": f'{e}'}, 400)
-                
-        return make_response(jsonify({'message': 'success'}), 200)
-    
+                        response = requests.post(STORAGE_SERVICE_UPLOAD_URL, files={"file": (filename, image)})
+                        if response.status_code != 200:
+                            return make_response({"result": "Failed to upload image"}, 400)
+                connection.commit()
+            return make_response(jsonify({'message': 'success'}), 200)
+        except Exception as e:
+            if connection:
+                connection.rollback()
+            return make_response({"message": f'{e}'}, 400)
     
 @comics_ns.route("/<string:comicId>/chapter/<string:chapterId>")
 class ChapterUpdateAPI(Resource):
@@ -186,20 +183,16 @@ class ChapterUpdateAPI(Resource):
         images = args['images']
         image_ids = args['image_ids']
 
-        storage_dir = Config.UPLOAD_FOLDER
-        if not os.path.exists(storage_dir):
-            os.makedirs(storage_dir)
+        try:
+            with connection:
+                with connection.cursor() as cursor:
+                    query = "SELECT c.id FROM comics c INNER JOIN comic_chapters ch ON c.id = ch.comic_id WHERE c.id = %s AND c.user_id = %s AND ch.id = %s"
+                    cursor.execute(query, (comicId, user_id, chapterId))
+                    existing_chapter = cursor.fetchone()
 
-        with connection:
-            with connection.cursor() as cursor:
-                query = "SELECT c.id FROM comics c INNER JOIN comic_chapters ch ON c.id = ch.comic_id WHERE c.id = %s AND c.user_id = %s AND ch.id = %s"
-                cursor.execute(query, (comicId, user_id, chapterId))
-                existing_chapter = cursor.fetchone()
+                    if existing_chapter is None:
+                        return make_response(jsonify({'message': 'comic chapter not found'}), 404)
 
-                if existing_chapter is None:
-                    return make_response(jsonify({'message': 'comic chapter not found'}), 404)
-
-                try:
                     query = "UPDATE comic_chapters SET title = %s WHERE id = %s"
                     cursor.execute(query, (title, chapterId))
 
@@ -207,12 +200,17 @@ class ChapterUpdateAPI(Resource):
                         filename = secure_filename(image.filename)
                         query = "UPDATE chapter_images SET image = %s WHERE id = %s AND chapter_id = %s"
                         cursor.execute(query, (filename, image_id, chapterId))
-                        
+                            
                         if cursor.rowcount == 0:
                             return make_response(jsonify({'message': 'failed to update image'}), 404)
 
-                        image.save(os.path.join(storage_dir, filename)) 
-                except Exception as e:
-                    return make_response({"message": f'{e}'}, 400)
+                        response = requests.post(STORAGE_SERVICE_UPLOAD_URL, files={"file": (filename, image)})
+                        if response.status_code != 200:
+                            return make_response({"result": "Failed to upload image"}, 400)
+                connection.commit()
+                return make_response(jsonify({'message': 'success'}), 200)
+        except Exception as e:
+            if connection:
+                connection.rollback()
+            return make_response({"message": f'{e}'}, 400)
 
-        return make_response(jsonify({'message': 'success'}), 200)
