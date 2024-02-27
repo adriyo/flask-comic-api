@@ -16,7 +16,12 @@ def get_comic_status(type):
     }
     return comic_status.get(type, 'Unknown')
 
-def get_image_url(request, filename):
-    if filename:
-        return f'{request.headers.get("X-Original-URL")}/{Config.API_PREFIX}/{Config.UPLOAD_FOLDER}/{filename}'
-    return Config.NO_IMAGE_URL
+def get_image_cover_url(request, filename, user_id, comic_id):
+    if not filename:
+        return Config.NO_IMAGE_URL
+    return f'{request.headers.get("X-Original-URL")}/{Config.API_PREFIX}/{Config.UPLOAD_FOLDER}/{user_id}/{comic_id}/{filename}'
+
+def get_chapter_image_url(request, filename, user_id, comic_id, chapter_id):
+    if not filename:
+        return Config.NO_IMAGE_URL
+    return f'{request.headers.get("X-Original-URL")}/{Config.API_PREFIX}/{Config.UPLOAD_FOLDER}/{user_id}/{comic_id}/{chapter_id}/{filename}'

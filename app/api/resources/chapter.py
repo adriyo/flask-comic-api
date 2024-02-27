@@ -1,11 +1,10 @@
-import os
 from flask import jsonify, make_response, g, request
 from flask_restx import Resource, Namespace
 from werkzeug.utils import secure_filename
 from app.api.auth import auth_required
 from app.api.constants import STORAGE_SERVICE_UPLOAD_URL
-from app.api.resources.converter import get_comic_status, get_comic_type, get_image_url
-from app.config import Config, DBManager
+from app.api.resources.converter import get_chapter_image_url, get_comic_status, get_comic_type, get_image_cover_url
+from app.config import DBManager
 import requests
 from ..models import chapterInputParser, chapterUpdateInputParser
 
@@ -39,7 +38,7 @@ class ComicListAPI(Resource):
                 'published_date': comic[3],
                 'status': get_comic_status(comic[4]),
                 'type': get_comic_type(comic[5]),
-                'image_cover': get_image_url(request, comic[6]),
+                'image_cover': get_image_cover_url(request, comic[6], user_id, comic[0]),
             }
             for comic in comics
         ]
@@ -110,9 +109,9 @@ class ComicChapterDetailAPI(Resource):
             
             chapter_data = {
                 'title': comic[0][0],
-                'images': [image[1] for image in comic]
+                'images': [get_chapter_image_url(request, image[1], user_id, comicId, chapterId) for image in comic]
             }
-        return make_response(jsonify({'message': 'success', 'data': chapter_data}), 200)
+        return make_response(jsonify(chapter_data), 200)
 
 @comics_ns.route("/<string:comicId>/chapter")
 class ChapterImagesAPI(Resource):
@@ -159,10 +158,17 @@ class ChapterImagesAPI(Resource):
                         cursor.execute(query, (last_chapter_id, filename))
                         
                         if cursor.rowcount == 0:
+                            connection.rollback()
                             return make_response(jsonify({'message': 'failed to upload'}), 404)
 
-                        response = requests.post(STORAGE_SERVICE_UPLOAD_URL, files={"file": (filename, image)})
+                        request_files = {"file": (filename, image)}
+                        request_data = {"user_id": user_id, "comic_id": comicId, "chapter_id": last_chapter_id}
+                        response = requests.post(
+                            url=STORAGE_SERVICE_UPLOAD_URL, 
+                            files=request_files,
+                            data=request_data)
                         if response.status_code != 200:
+                            connection.rollback()
                             return make_response({"result": "Failed to upload image"}, 400)
                 connection.commit()
             return make_response(jsonify({'message': 'success'}), 200)
@@ -200,15 +206,19 @@ class ChapterUpdateAPI(Resource):
                         filename = secure_filename(image.filename)
                         query = "UPDATE chapter_images SET image = %s WHERE id = %s AND chapter_id = %s"
                         cursor.execute(query, (filename, image_id, chapterId))
-                            
-                        if cursor.rowcount == 0:
-                            return make_response(jsonify({'message': 'failed to update image'}), 404)
 
-                        response = requests.post(STORAGE_SERVICE_UPLOAD_URL, files={"file": (filename, image)})
+                        request_files = {"file": (filename, image)}
+                        request_data = {"user_id": user_id, "comic_id": comicId, "chapter_id": chapterId}
+                        response = requests.post(
+                            url=STORAGE_SERVICE_UPLOAD_URL,
+                            files=request_files, 
+                            data=request_data)
                         if response.status_code != 200:
+                            connection.rollback()
                             return make_response({"result": "Failed to upload image"}, 400)
+                        
                 connection.commit()
-                return make_response(jsonify({'message': 'success'}), 200)
+            return make_response(jsonify({'message': 'success'}), 200)
         except Exception as e:
             if connection:
                 connection.rollback()

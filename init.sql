@@ -111,7 +111,7 @@ CREATE TABLE IF NOT EXISTS comic_genres (
     genre_id SERIAL NOT NULL,
     CONSTRAINT comic_genres_pk PRIMARY KEY (comic_id, genre_id),
     CONSTRAINT comic_genres_comic_id_fkey FOREIGN KEY (comic_id) REFERENCES comics (id) ON DELETE CASCADE,
-    CONSTRAINT comci_genres_genre_id_fkey FOREIGN KEY (genre_id) REFERENCES genres (id) ON DELETE CASCADE
+    CONSTRAINT comic_genres_genre_id_fkey FOREIGN KEY (genre_id) REFERENCES genres (id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS comic_tags (
@@ -119,7 +119,7 @@ CREATE TABLE IF NOT EXISTS comic_tags (
     tag_id SERIAL NOT NULL,
     CONSTRAINT comic_tags_pk PRIMARY KEY (comic_id, tag_id),
     CONSTRAINT comic_tags_comic_id_fkey FOREIGN KEY (comic_id) REFERENCES comics (id) ON DELETE CASCADE,
-    CONSTRAINT comci_tags_tag_id_fkey FOREIGN KEY (tag_id) REFERENCES tags (id) ON DELETE CASCADE
+    CONSTRAINT comic_tags_tag_id_fkey FOREIGN KEY (tag_id) REFERENCES tags (id) ON DELETE CASCADE
 );
 
 COMMENT ON COLUMN comics.type IS '0 - manga, 1 - manhwa, 2 - manhua';

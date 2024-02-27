@@ -9,7 +9,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - db:/data/postgres
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./init.sql:/docker-entrypoint-initdb.d/1-init.sql
+      - ./dummy.sql:/docker-entrypoint-initdb.d/2-dummy.sql
     ports:
       - "5432:5432"
     restart: unless-stopped

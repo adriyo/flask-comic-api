@@ -5,7 +5,7 @@ from psycopg2 import DatabaseError
 from app.api.auth import auth_required
 import requests
 from app.api.constants import STORAGE_SERVICE_SAVE_URL, STORAGE_SERVICE_UPLOAD_URL
-from app.api.resources.converter import get_comic_status, get_comic_type, get_image_url
+from app.api.resources.converter import get_comic_status, get_comic_type, get_image_cover_url
 from app.api.resources.helper import parse_published_date
 from app.config import Config, DBManager
 
@@ -22,7 +22,7 @@ class ChapterListAPI(Resource):
     def get(self, comic_id):
         with connection:
             with connection.cursor() as cursor:
-                query = "SELECT id, title, description, published_date, status, type, image_cover FROM comics WHERE id = %s"
+                query = "SELECT id, title, description, published_date, status, type, image_cover, user_id FROM comics WHERE id = %s"
                 cursor.execute(query, comic_id)
                 comic = cursor.fetchone()
         if comic == None:
@@ -34,7 +34,7 @@ class ChapterListAPI(Resource):
             'published_date': comic[3],
             'status': get_comic_status(comic[4]),
             'type': get_comic_type(comic[5]),
-            'image_cover': get_image_url(request, comic[6]),
+            'image_cover': get_image_cover_url(request, comic[6], comic[7], comic[0]),
         }
         return make_response(jsonify(result), 200)
     
@@ -173,10 +173,6 @@ class ComicAPI(Resource):
             if image_cover != None:
                 filename = secure_filename(image_cover.filename)
 
-                response = requests.post(STORAGE_SERVICE_UPLOAD_URL, files={"file": (filename, image_cover)})
-                if response.status_code != 200:
-                    return make_response({"result": "Failed to upload image"}, 400)
-
             query = """
                 INSERT INTO comics (title, alternative_title, description, published_date, status, type, image_cover, user_id)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
@@ -209,7 +205,18 @@ class ComicAPI(Resource):
                         translator_values = [(comic_id, translator_id) for translator_id in translators]
                         cursor.executemany("INSERT INTO comic_translators (comic_id, translator_id) VALUES (%s, %s)", translator_values)
 
-                    connection.commit()
+                    request_files = {"file": (filename, image_cover)}
+                    request_data = {"user_id": user_id, "comic_id": comic_id}
+                    response = requests.post(
+                        url=STORAGE_SERVICE_UPLOAD_URL, 
+                        files=request_files, 
+                        data=request_data
+                    )
+                    if response.status_code != 200:
+                        connection.rollback()
+                        return make_response({"result": "Failed to upload image"}, 400)
+
+                connection.commit()
             result = {"message": "Data received successfully"}
             return make_response(jsonify(result), 201)
         except Exception as e:
@@ -223,52 +230,51 @@ class ComicBulkAPI(Resource):
     def post(self):
         user_id = g.user_id
         file_data = request.get_array(field_name='file')
-        comics_to_insert = []
 
         if len(file_data) == 0 or len(file_data) == 1:
             return make_response({"result": "No data provided"}, 400)
         
         data = file_data[1:]
 
-        for comic_data in data:
-            title = comic_data[0]
-            if not title:
-                continue
-            
-            alternative_title = comic_data[1]
-            published_date = comic_data[2]
-            status = comic_data[3]
-            comic_type = comic_data[4]
-            description = comic_data[5]
-            image_url = comic_data[6]
-
-            if published_date:
-                published_datetime = parse_published_date(published_date)
-
-                if published_datetime is None:
-                   return make_response({"result": "Invalid published date format"}, 400)
-
-            filename = None
-            if image_url:
-                try:
-                    response = requests.post(STORAGE_SERVICE_SAVE_URL, json={"url": image_url})
-                    if response.status_code != 200:
-                        return make_response({"result": "Failed to download image"}, 400)
-                    filename = response.json()["filename"]
-                except Exception as e:
-                    return make_response({"result": f'Error: {e}'}, 400)
-
-            comics_to_insert.append((title, alternative_title, published_datetime, status, comic_type, description, filename, user_id))
-
         try:            
-            with connection:
-                with connection.cursor() as cursor:
-                    query = """
-                        INSERT INTO comics (title, alternative_title, published_date, status, type, description, image_cover, user_id)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
-                    """
-                    cursor.executemany(query, comics_to_insert)
-                    connection.commit()
+            for comic_data in data:
+                title = comic_data[0]
+                if not title:
+                    continue
+                
+                alternative_title = comic_data[1]
+                published_date = comic_data[2]
+                status = comic_data[3]
+                comic_type = comic_data[4]
+                description = comic_data[5]
+                image_url = comic_data[6]
+
+                if published_date:
+                    published_datetime = parse_published_date(published_date)
+
+                    if published_datetime is None:
+                        return make_response({"result": "Invalid published date format"}, 400)
+                
+                with connection:
+                    with connection.cursor() as cursor:
+                        query = """
+                            INSERT INTO comics (title, alternative_title, published_date, status, type, description, image_cover, user_id)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                            RETURNING id;
+                        """
+                        filename = secure_filename(os.path.basename(image_url))
+                        cursor.execute(query, (title, alternative_title, published_datetime, status, comic_type, description, filename, user_id))
+                        comic_id = cursor.fetchone()[0]
+
+                        filename = None
+                        if image_url:
+                            request_payload = {"url": image_url, "user_id": str(user_id), "comic_id": str(comic_id)}
+                            response = requests.post(STORAGE_SERVICE_SAVE_URL, json=request_payload)
+                            if response.status_code != 200:
+                                connection.rollback()
+                                return make_response({"result": "Failed to download image"}, 400)
+                        connection.commit()
+
             result = {"message": "Data received successfully"}
             return make_response(jsonify(result), 201)
         except Exception as e:

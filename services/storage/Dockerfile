@@ -2,9 +2,11 @@ FROM golang:alpine
 
 WORKDIR /app
 
-COPY . .
+COPY main.go .
 
-RUN mkdir storages
+COPY Dockerfile .
+
+RUN mkdir -p storages
 
 RUN go mod init storage-service && \
     go mod tidy
