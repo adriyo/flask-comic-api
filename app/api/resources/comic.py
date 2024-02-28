@@ -4,7 +4,7 @@ from flask_restx import Namespace, Resource
 from psycopg2 import DatabaseError 
 from app.api.auth import auth_required
 import requests
-from app.api.constants import STORAGE_SERVICE_SAVE_URL, STORAGE_SERVICE_UPLOAD_URL
+from app.api.constants import STORAGE_SERVICE_FILES_URL, STORAGE_SERVICE_SAVE_URL, STORAGE_SERVICE_UPLOAD_URL
 from app.api.resources.converter import get_comic_status, get_comic_type, get_image_cover_url
 from app.api.resources.helper import parse_published_date
 from app.config import Config, DBManager
@@ -296,28 +296,23 @@ class DeleteComicAPI(Resource):
     @auth_required
     def delete(self, comic_id):
         user_id = g.user_id       
-        with connection:
-            with connection.cursor() as cursor:
-                cursor.execute("SELECT image_cover FROM comics WHERE id = %s AND user_id = %s", (comic_id, user_id))
-                cover_filename = cursor.fetchone()[0]
-                cursor.execute("SELECT image FROM chapter_images WHERE chapter_id IN (SELECT id FROM comic_chapters WHERE comic_id = %s)", (comic_id,))
-                chapter_filenames = cursor.fetchall()
+        try:
+            with connection:
+                with connection.cursor() as cursor:
+                    query = "DELETE FROM comics WHERE id = %s AND user_id = %s"
+                    cursor.execute(query, (comic_id, user_id))
+                    
+                    if cursor.rowcount == 0:
+                        return make_response(jsonify({'message': 'comic not found'}), 404)
 
-                storage_dir = Config.UPLOAD_FOLDER
-
-                if cover_filename:
-                    cover_path = os.path.join(storage_dir, cover_filename)
-                    if os.path.exists(cover_path):
-                        os.remove(cover_path)
-                for chapter_filename in chapter_filenames:
-                    if chapter_filename:
-                        chapter_path = os.path.join(storage_dir, chapter_filename[0])
-                        if os.path.exists(chapter_path):
-                            os.remove(chapter_path)
-
-                query = "DELETE FROM comics WHERE id = %s AND user_id = %s"
-                cursor.execute(query, (comic_id, user_id))
-                if cursor.rowcount == 0:
-                    return make_response(jsonify({'message': 'comic not found'}), 404)
-                else:
-                    return make_response(jsonify({'message': 'comic deleted'}), 200)
+                comic_url = f'{STORAGE_SERVICE_FILES_URL}{user_id}/{comic_id}'
+                response = requests.delete(comic_url)
+                if response.status_code != 200:
+                    connection.rollback()
+                    return make_response({"result": "Failed to delete images"}, 400)
+                connection.commit()
+                return make_response(jsonify({'message': 'comic deleted'}), 200)
+        except Exception as e:
+            if connection:
+                connection.rollback()
+            return make_response(jsonify({'result': f'{e}'}), 200)

@@ -164,10 +164,45 @@ func saveHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"filename": filename})
 }
 
+func deleteFiles(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/files/"), "/")
+	if len(parts) < 2 {
+		http.Error(w, "Invalid file path", http.StatusBadRequest)
+		return
+	}
+
+	userID := parts[0]
+	comicID := parts[1]
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		http.Error(w, "error getting files", http.StatusNotFound)
+		return
+	}
+
+	filePath := filepath.Join(cwd, "storages", userID, comicID)
+	fmt.Println("filePath: ", filePath)
+	e := os.RemoveAll(filePath)
+	if e != nil {
+		http.Error(w, "File not found", http.StatusNotFound)
+		return
+	}
+
+	fmt.Fprintf(w, "Files deleted Successfully")
+}
+
+func fileHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "GET" {
+		serveFile(w, r)
+	} else if r.Method == "DELETE" {
+		deleteFiles(w, r)
+	}
+}
+
 func setupRoutes() {
 	http.HandleFunc("/save", saveHandler)
 	http.HandleFunc("/upload", uploadFile)
-	http.HandleFunc("/files/", serveFile)
+	http.HandleFunc("/files/", fileHandler)
 	http.ListenAndServe(":8080", nil)
 }
 
