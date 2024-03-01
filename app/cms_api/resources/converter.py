@@ -11,6 +11,9 @@ def parse_published_date(published_date):
         return datetime.strptime(published_date, "%d/%m/%Y").date()
     except ValueError as e:
         return None
+    
+def get_config_env(config):
+    return config['FLASK_ENV']
 
 def get_comic_type(type):
     comic_types = {
@@ -27,8 +30,8 @@ def get_comic_status(type):
         2: 'hiatus',
     }
     return comic_status.get(type, 'Unknown')
-def get_host_url() -> str:
-    if os.environ['FLASK_ENV'] == 'development':
+def get_host_url(config) -> str:
+    if get_config_env(config) == 'development':
         return f'{request.url_root}'
     return f'{request.headers.get('X-Original-URL')}/'
 

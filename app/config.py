@@ -4,7 +4,6 @@ import psycopg2
 from flask_mail import Mail
 import flask_excel as excel
 
-
 class Config:
     CMS_API_PREFIX = 'cms-api'
     API_DOC_PREFIX = 'docs'
@@ -15,7 +14,16 @@ class Config:
     MAIL_USERNAME = os.environ['MAIL_USERNAME']
     MAIL_PASSWORD = os.environ['MAIL_PASSWORD']
     NO_IMAGE_URL = 'https://via.placeholder.com/200x200?text=NOT%20FOUND'
+    FLASK_ENV = 'development'
+    DEBUG = True
 
+class ProductionConfig(Config):
+    FLASK_ENV = 'production'
+    DEBUG = False
+
+class DevelopmentConfig(Config):
+    FLASK_ENV = 'development'
+    DEBUG = True
 
 class DBManager:
     def __init__(self):
@@ -27,8 +35,13 @@ class DBManager:
 
     def get_connection(self):
         return self.conn
+    
+config_dict = {
+    'development': DevelopmentConfig,
+    'production': ProductionConfig
+}
 
 app = Flask(__name__)
-app.config.from_object(Config)
+app.config.from_object(config_dict[f'{os.environ['FLASK_ENV']}'])
 excel.init_excel(app)
 mail = Mail(app)

@@ -39,9 +39,6 @@ services:
       - 5000
     env_file:
       - ./.env
-    environment:
-      - FLASK_DEBUG=${FLASK_DEBUG}
-      - FLASK_ENV=${FLASK_ENV}
     depends_on:
       db:
           condition: service_healthy

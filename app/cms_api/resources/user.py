@@ -1,8 +1,8 @@
 import os
 from flask import jsonify, make_response, render_template
 from flask_restx import Namespace, Resource
-from app.cms_api.resources.converter import get_host_url
-from app.config import Config, DBManager, mail
+from app.cms_api.resources.converter import get_host_url, get_config_env
+from app.config import Config, DBManager, mail, app
 from app.cms_api.parser import user
 import bcrypt
 import base64
@@ -44,9 +44,9 @@ class RegisterAPI(Resource):
                         f"{email}:{hashed_pwd}".encode('ascii')).decode('utf-8')
                     
                     result = None
-                    confirm_url = f'{get_host_url()}/{Config.CMS_API_PREFIX}/user/confirm/{string_token}'
+                    confirm_url = f'{get_host_url(app.config)}{Config.CMS_API_PREFIX}/user/confirm/{string_token}'
 
-                    if os.environ.get('FLASK_ENV') == 'production':  
+                    if get_config_env(app.config) == 'production':  
                         msg = Message(
                             subject='Confirmation',
                             sender=Config.MAIL_USERNAME,
