@@ -2,15 +2,17 @@ import os
 from flask import jsonify, make_response, g, request
 from flask_restx import Namespace, Resource
 from psycopg2 import DatabaseError 
-from app.api.auth import auth_required
+from app.cms_api.auth import auth_required
 import requests
-from app.api.constants import STORAGE_SERVICE_FILES_URL, STORAGE_SERVICE_SAVE_URL, STORAGE_SERVICE_UPLOAD_URL
-from app.api.resources.converter import get_comic_status, get_comic_type, get_image_cover_url
-from app.api.resources.helper import parse_published_date
-from app.config import Config, DBManager
-
-from ..models import comicInputParser, comicUpdateInputParser
+from app.cms_api.constants import STORAGE_SERVICE_FILES_URL, STORAGE_SERVICE_SAVE_URL, STORAGE_SERVICE_UPLOAD_URL
+from app.cms_api.resources.converter import parse_published_date, get_comic_status, get_comic_type, get_image_cover_url
+from app.config import DBManager
 from werkzeug.utils import secure_filename
+from app.cms_api.parser import comic
+
+
+comicInputParser = comic.input_parser()
+comicUpdateInputParser = comic.update_input_parser()
 
 ns = Namespace('comic')
 
@@ -34,7 +36,7 @@ class ChapterListAPI(Resource):
             'published_date': comic[3],
             'status': get_comic_status(comic[4]),
             'type': get_comic_type(comic[5]),
-            'image_cover': get_image_cover_url(request, comic[6], comic[7], comic[0]),
+            'image_cover': get_image_cover_url(comic[6], comic[7], comic[0]),
         }
         return make_response(jsonify(result), 200)
     
@@ -228,15 +230,15 @@ class ComicAPI(Resource):
 class ComicBulkAPI(Resource):
     @auth_required
     def post(self):
-        user_id = g.user_id
-        file_data = request.get_array(field_name='file')
-
-        if len(file_data) == 0 or len(file_data) == 1:
-            return make_response({"result": "No data provided"}, 400)
-        
-        data = file_data[1:]
-
         try:            
+            user_id = g.user_id
+            file_data = request.get_array(field_name='file')
+
+            if len(file_data) == 0 or len(file_data) == 1:
+                return make_response({"result": "No data provided"}, 400)
+            
+            data = file_data[1:]
+
             for comic_data in data:
                 title = comic_data[0]
                 if not title:

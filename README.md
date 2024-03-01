@@ -23,7 +23,9 @@ MAIL_USERNAME={{your email}}
 MAIL_PASSWORD={{your password from mail service}}
 MAIL_SERVER={{your mail server}}
 MAIL_PORT={{your mail port}}
-MAIL_USE_SSL={{true or false}}
+MAIL_USE_SSL={{True or False}}
+FLASK_DEBUG={{True or False}}
+FLASK_ENV={{development or production}}
 
 ```
 
@@ -32,10 +34,15 @@ Use the following command to build and start the project:
 
 
 ```bash
+# For development, you can run the dev.sh file
+chmod +x ./dev.sh
+./dev.sh
+
+# Or using Docker compose directly
 docker compose up --build
 ```
 ## Swagger
-Explore the API documentation using Swagger at [localhost:5000/docs](http://localhost:5000/docs)
+Explore the API documentation using Swagger at [localhost:5000/cms-api/docs](http://localhost:5000/cms-api/docs)
 
 **Note:**
 This project is still experimental, and there may be changes in the future during development.

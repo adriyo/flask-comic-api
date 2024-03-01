@@ -1,15 +1,19 @@
 from flask import jsonify, make_response, g, request
 from flask_restx import Resource, Namespace
 from werkzeug.utils import secure_filename
-from app.api.auth import auth_required
-from app.api.constants import STORAGE_SERVICE_UPLOAD_URL
-from app.api.resources.converter import get_chapter_image_url, get_comic_status, get_comic_type, get_image_cover_url
+from app.cms_api.auth import auth_required
+from app.cms_api.constants import STORAGE_SERVICE_UPLOAD_URL
+from app.cms_api.resources.converter import get_chapter_image_url, get_comic_status, get_comic_type, get_image_cover_url
 from app.config import DBManager
 import requests
-from ..models import chapterInputParser, chapterUpdateInputParser
+from app.cms_api.parser import chapter
 
 comics_ns = Namespace('comics')
 connection = DBManager().get_connection()
+
+
+chapterInputParser = chapter.input_parser()
+chapterUpdateInputParser = chapter.update_input_parser()
 
 @comics_ns.route("")
 class ComicListAPI(Resource):
@@ -38,7 +42,7 @@ class ComicListAPI(Resource):
                 'published_date': comic[3],
                 'status': get_comic_status(comic[4]),
                 'type': get_comic_type(comic[5]),
-                'image_cover': get_image_cover_url(request, comic[6], user_id, comic[0]),
+                'image_cover': get_image_cover_url(comic[6], user_id, comic[0]),
             }
             for comic in comics
         ]
@@ -92,7 +96,8 @@ class ComicChapterDetailAPI(Resource):
                 query = """
                     SELECT 
                         comic_chapters.title as chapter_title, 
-                        chapter_images.image as image
+                        chapter_images.image as image,
+                        chapter_images.id as id
                     FROM 
                         comic_chapters 
                     JOIN 
@@ -109,7 +114,13 @@ class ComicChapterDetailAPI(Resource):
             
             chapter_data = {
                 'title': comic[0][0],
-                'images': [get_chapter_image_url(request, image[1], user_id, comicId, chapterId) for image in comic]
+                'images': [
+                    {
+                        'id':image[2],
+                        'url':get_chapter_image_url(image[1], user_id, comicId, chapterId)
+                    }
+                    for image in comic
+                ]
             }
         return make_response(jsonify(chapter_data), 200)
 

@@ -3,7 +3,7 @@ from flask import redirect, send_file
 from flask_restx import Resource, Namespace
 import requests
 import mimetypes
-from app.api.constants import STORAGE_SERVICE_FILES_URL
+from app.cms_api.constants import STORAGE_SERVICE_FILES_URL
 from app.config import Config
 
 ns = Namespace("storages") 

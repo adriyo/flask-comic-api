@@ -6,7 +6,7 @@ import flask_excel as excel
 
 
 class Config:
-    API_PREFIX = 'api'
+    CMS_API_PREFIX = 'cms-api'
     API_DOC_PREFIX = 'docs'
     UPLOAD_FOLDER = 'storages'
     MAIL_SERVER = os.environ['MAIL_SERVER']
