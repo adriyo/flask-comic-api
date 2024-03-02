@@ -7,4 +7,4 @@ cms_api_bp = Blueprint(
     template_folder="templates"
 )
 
-from .resources import user, storage, comic, chapter
+from .resources import user, storage, comic

@@ -1,11 +1,7 @@
 from functools import wraps
 from flask import jsonify, make_response, request, g
 import base64
-from app.config import DBManager
-
-db_manager = DBManager()
-connection = db_manager.get_connection()
-
+from app.config.db import connection
 
 def auth_required(f):
     @wraps(f)

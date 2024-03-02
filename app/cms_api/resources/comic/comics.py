@@ -5,18 +5,50 @@ from psycopg2 import DatabaseError
 from app.cms_api.auth import auth_required
 import requests
 from app.cms_api.constants import STORAGE_SERVICE_FILES_URL, STORAGE_SERVICE_SAVE_URL, STORAGE_SERVICE_UPLOAD_URL
-from app.cms_api.resources.converter import parse_published_date, get_comic_status, get_comic_type, get_image_cover_url
-from app.config import DBManager
+from app.cms_api.resources.helper import allowed_file, parse_published_date, get_comic_status, get_comic_type, get_image_cover_url
+from app.config.db import connection
 from werkzeug.utils import secure_filename
 from app.cms_api.parser import comic
-
+from app.config import app
 
 comicInputParser = comic.input_parser()
 comicUpdateInputParser = comic.update_input_parser()
 
-ns = Namespace('comic')
+ns = Namespace('comics')
 
-connection = DBManager().get_connection()
+@ns.route("")
+class ComicListAPI(Resource):
+
+    @auth_required
+    def get(self):
+        user_id = g.user_id
+        page = max(1, request.args.get('page', default=1, type=int))
+        limit = request.args.get('limit', default=10, type=int)
+
+        with connection:
+            with connection.cursor() as cursor:
+                query = """
+                SELECT id, title, description, published_date, status, type, image_cover
+                FROM comics WHERE user_id = %s
+                LIMIT %s OFFSET %s
+                """
+                offset = (page - 1) * limit
+                cursor.execute(query, (user_id, limit, offset))
+                comics = cursor.fetchall()
+        results = [
+            {
+                'id': comic[0],
+                'title': comic[1],
+                'description': comic[2],
+                'published_date': comic[3],
+                'status': get_comic_status(comic[4]),
+                'type': get_comic_type(comic[5]),
+                'image_cover': get_image_cover_url(app.config, comic[6], user_id, comic[0]),
+            }
+            for comic in comics
+        ]
+
+        return make_response(jsonify(results), 200)
 
 @ns.route("/<string:comic_id>")
 class ChapterListAPI(Resource):
@@ -36,7 +68,7 @@ class ChapterListAPI(Resource):
             'published_date': comic[3],
             'status': get_comic_status(comic[4]),
             'type': get_comic_type(comic[5]),
-            'image_cover': get_image_cover_url(comic[6], comic[7], comic[0]),
+            'image_cover': get_image_cover_url(app.config, comic[6], comic[7], comic[0]),
         }
         return make_response(jsonify(result), 200)
     
@@ -76,6 +108,10 @@ class ChapterListAPI(Resource):
                     filename = ''
                     if 'image_cover' in request.files:
                         filename = secure_filename(image_cover.filename)
+
+                        if not allowed_file(filename):
+                            return make_response({"result": "File type not allowed"}, 400)
+
                         response = requests.post(STORAGE_SERVICE_UPLOAD_URL, files={"file": (filename, image_cover)})
                         if response.status_code != 200:
                             return make_response({"result": "Failed to upload image"}, 400)
@@ -174,6 +210,8 @@ class ComicAPI(Resource):
             filename = ''
             if image_cover != None:
                 filename = secure_filename(image_cover.filename)
+                if not allowed_file(filename):
+                    return make_response({"result": "File type not allowed"}, 400)
 
             query = """
                 INSERT INTO comics (title, alternative_title, description, published_date, status, type, image_cover, user_id)
@@ -265,6 +303,10 @@ class ComicBulkAPI(Resource):
                             RETURNING id;
                         """
                         filename = secure_filename(os.path.basename(image_url))
+
+                        if not allowed_file(filename):
+                            return make_response({"result": "File type not allowed"}, 400)
+
                         cursor.execute(query, (title, alternative_title, published_datetime, status, comic_type, description, filename, user_id))
                         comic_id = cursor.fetchone()[0]
 

@@ -1,53 +1,18 @@
-from flask import jsonify, make_response, g, request
+from flask import jsonify, make_response, g
 from flask_restx import Resource, Namespace
 from werkzeug.utils import secure_filename
 from app.cms_api.auth import auth_required
 from app.cms_api.constants import STORAGE_SERVICE_UPLOAD_URL
-from app.cms_api.resources.converter import get_chapter_image_url, get_comic_status, get_comic_type, get_image_cover_url
-from app.config import DBManager
+from app.cms_api.resources.helper import get_chapter_image_url, get_image_cover_url
+from app.config.db import connection
+from app.config import app
 import requests
 from app.cms_api.parser import chapter
 
 comics_ns = Namespace('comics')
-connection = DBManager().get_connection()
-
 
 chapterInputParser = chapter.input_parser()
 chapterUpdateInputParser = chapter.update_input_parser()
-
-@comics_ns.route("")
-class ComicListAPI(Resource):
-
-    @auth_required
-    def get(self):
-        user_id = g.user_id
-        page = max(1, request.args.get('page', default=1, type=int))
-        limit = request.args.get('limit', default=10, type=int)
-
-        with connection:
-            with connection.cursor() as cursor:
-                query = """
-                SELECT id, title, description, published_date, status, type, image_cover
-                FROM comics WHERE user_id = %s
-                LIMIT %s OFFSET %s
-                """
-                offset = (page - 1) * limit
-                cursor.execute(query, (user_id, limit, offset))
-                comics = cursor.fetchall()
-        results = [
-            {
-                'id': comic[0],
-                'title': comic[1],
-                'description': comic[2],
-                'published_date': comic[3],
-                'status': get_comic_status(comic[4]),
-                'type': get_comic_type(comic[5]),
-                'image_cover': get_image_cover_url(comic[6], user_id, comic[0]),
-            }
-            for comic in comics
-        ]
-
-        return make_response(jsonify(results), 200)
     
 @comics_ns.route("/<string:comicId>/chapters")
 class ChapterListAPI(Resource):
@@ -76,7 +41,7 @@ class ChapterListAPI(Resource):
             }
             for chapter in chapters
         ]
-        return make_response(jsonify({'message': 'success', 'data': result}), 200)
+        return make_response(jsonify(result), 200)
     
 @comics_ns.route("/<string:comicId>/chapter/<string:chapterId>")
 class ComicChapterDetailAPI(Resource):
@@ -117,7 +82,7 @@ class ComicChapterDetailAPI(Resource):
                 'images': [
                     {
                         'id':image[2],
-                        'url':get_chapter_image_url(image[1], user_id, comicId, chapterId)
+                        'url':get_chapter_image_url(app.config, image[1], user_id, comicId, chapterId)
                     }
                     for image in comic
                 ]
@@ -131,14 +96,20 @@ class ChapterImagesAPI(Resource):
         user_id = g.user_id
         with connection:
             with connection.cursor() as cursor:
-                query = "SELECT id, title, description, author, published_date, image_cover FROM comics WHERE user_id = %s AND id = %s"
+                query = "SELECT id, title, description, published_date, image_cover FROM comics WHERE user_id = %s AND id = %s"
                 cursor.execute(query, (user_id, comicId))
                 comic = cursor.fetchone()
             
             if comic == None:
                 return make_response(jsonify({'message': 'comic not found'}), 404)
-            
-        return make_response(jsonify({'message': 'success', 'data': comic}), 200)
+            result = {
+                'id': comic[0],
+                'title': comic[1],
+                'description': comic[2],
+                'published_date': comic[3],
+                'image_cover': get_image_cover_url(app.config, comic[4], user_id, comic[0]),
+            }
+        return make_response(jsonify(result), 200)
 
     @comics_ns.expect(chapterInputParser)
     @auth_required

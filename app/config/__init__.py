@@ -1,6 +1,5 @@
 import os
 from flask import Flask
-import psycopg2
 from flask_mail import Mail
 import flask_excel as excel
 
@@ -24,17 +23,6 @@ class ProductionConfig(Config):
 class DevelopmentConfig(Config):
     FLASK_ENV = 'development'
     DEBUG = True
-
-class DBManager:
-    def __init__(self):
-        self.conn = psycopg2.connect(
-            host=os.environ['POSTGRES_HOST_DB'],
-            database=os.environ['POSTGRES_DB'],
-            user=os.environ['POSTGRES_USER'],
-            password=os.environ['POSTGRES_PASSWORD'])
-
-    def get_connection(self):
-        return self.conn
     
 config_dict = {
     'development': DevelopmentConfig,

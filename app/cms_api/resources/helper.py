@@ -35,12 +35,18 @@ def get_host_url(config) -> str:
         return f'{request.url_root}'
     return f'{request.headers.get('X-Original-URL')}/'
 
-def get_image_cover_url(filename, user_id, comic_id):
+def get_image_cover_url(config, filename, user_id, comic_id):
     if not filename:
         return Config.NO_IMAGE_URL
-    return f'{get_host_url()}{Config.CMS_API_PREFIX}/{Config.UPLOAD_FOLDER}/{user_id}/{comic_id}/{filename}'
+    return f'{get_host_url(config)}{Config.CMS_API_PREFIX}/{Config.UPLOAD_FOLDER}/{user_id}/{comic_id}/{filename}'
 
-def get_chapter_image_url(filename, user_id, comic_id, chapter_id):
+def get_chapter_image_url(config, filename, user_id, comic_id, chapter_id):
     if not filename:
         return Config.NO_IMAGE_URL
-    return f'{get_host_url()}{Config.CMS_API_PREFIX}/{Config.UPLOAD_FOLDER}/{user_id}/{comic_id}/{chapter_id}/{filename}'
+    return f'{get_host_url(config)}{Config.CMS_API_PREFIX}/{Config.UPLOAD_FOLDER}/{user_id}/{comic_id}/{chapter_id}/{filename}'
+
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp'}
+
+def allowed_file(filename) -> bool:
+    return '.' in filename and \
+        filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
