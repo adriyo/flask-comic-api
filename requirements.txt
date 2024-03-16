@@ -9,6 +9,7 @@ requests==2.31.0
 gunicorn==21.0.1
 Flask-Excel==0.0.7
 pyexcel-xlsx==0.6.0
+Flask-Cors==4.0.0
 
 # https://github.com/pyexcel/pyexcel-xlsx/issues/52#issuecomment-1421270097
 openpyxl==3.0.10

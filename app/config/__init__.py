@@ -2,6 +2,7 @@ import os
 from flask import Flask
 from flask_mail import Mail
 import flask_excel as excel
+from flask_cors import CORS
 
 class Config:
     CMS_API_PREFIX = 'cms-api'
@@ -30,6 +31,7 @@ config_dict = {
 }
 
 app = Flask(__name__)
+CORS(app)
 app.config.from_object(config_dict[f'{os.environ['FLASK_ENV']}'])
 excel.init_excel(app)
 mail = Mail(app)
