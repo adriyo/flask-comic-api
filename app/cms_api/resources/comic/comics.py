@@ -1,3 +1,4 @@
+from datetime import datetime
 import os
 from flask import jsonify, make_response, g, request
 from flask_restx import Namespace, Resource
@@ -17,6 +18,7 @@ comicUpdateInputParser = comic.update_input_parser()
 ns = Namespace('comics')
 
 @ns.route("")
+@ns.route("/")
 class ComicListAPI(Resource):
 
     @auth_required
@@ -27,6 +29,11 @@ class ComicListAPI(Resource):
 
         with connection:
             with connection.cursor() as cursor:
+                count_query = "SELECT COUNT(*) FROM comics WHERE user_id = %s"
+                cursor.execute(count_query, (user_id,))
+                total_records = cursor.fetchone()[0]
+                total_pages = (total_records + limit - 1) // limit
+
                 query = """
                 SELECT id, title, description, published_date, status, type, image_cover
                 FROM comics WHERE user_id = %s
@@ -35,20 +42,27 @@ class ComicListAPI(Resource):
                 offset = (page - 1) * limit
                 cursor.execute(query, (user_id, limit, offset))
                 comics = cursor.fetchall()
-        results = [
-            {
-                'id': comic[0],
-                'title': comic[1],
-                'description': comic[2],
-                'published_date': comic[3],
-                'status': get_comic_status(comic[4]),
-                'type': get_comic_type(comic[5]),
-                'image_cover': get_image_cover_url(app.config, comic[6], user_id, comic[0]),
-            }
-            for comic in comics
-        ]
 
-        return make_response(jsonify(results), 200)
+            comics_result = []
+            for comic in comics:
+                published_date = datetime.strftime(comic[3], "%d-%m-%Y") if comic[3] else None
+                comic_data = {
+                    'id': comic[0],
+                    'title': comic[1],
+                    'description': comic[2],
+                    'published_date': published_date,
+                    'status': get_comic_status(comic[4]),
+                    'type': get_comic_type(comic[5]),
+                    'image_cover': get_image_cover_url(app.config, comic[6], user_id, comic[0]),
+                }
+                comics_result.append(comic_data)
+
+            result = {
+                'data': comics_result,
+                'total_pages': total_pages
+            }
+
+            return make_response(jsonify(result), 200)
 
 @ns.route("/<string:comic_id>")
 class ChapterListAPI(Resource):
@@ -112,7 +126,14 @@ class ChapterListAPI(Resource):
                         if not allowed_file(filename):
                             return make_response({"result": "File type not allowed"}, 400)
 
-                        response = requests.post(STORAGE_SERVICE_UPLOAD_URL, files={"file": (filename, image_cover)})
+                        request_files = {"file": (filename, image_cover)}
+                        request_data = {"user_id": user_id, "comic_id": comic_id}
+                        response = requests.post(
+                            url=STORAGE_SERVICE_UPLOAD_URL, 
+                            files=request_files, 
+                            data=request_data
+                        )
+
                         if response.status_code != 200:
                             return make_response({"result": "Failed to upload image"}, 400)
                     
