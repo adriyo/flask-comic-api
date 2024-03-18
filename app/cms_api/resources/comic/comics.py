@@ -35,17 +35,35 @@ class ComicListAPI(Resource):
                 total_pages = (total_records + limit - 1) // limit
 
                 query = """
-                SELECT id, title, description, published_date, status, type, image_cover
-                FROM comics WHERE user_id = %s
-                LIMIT %s OFFSET %s
+                SELECT 
+                    c.id, c.title, c.description, c.published_date, c.status, c.type, c.image_cover,
+                    COALESCE(array_agg(a.id) FILTER (WHERE a.id IS NOT NULL), '{}') as author_ids,
+                    COALESCE(array_agg(a.name) FILTER (WHERE a.name IS NOT NULL), '{}') as author_names
+                FROM 
+                    comics c 
+                LEFT JOIN 
+                    comic_authors ca ON c.id = ca.comic_id
+                LEFT JOIN 
+                    authors a ON ca.author_id = a.id
+                WHERE
+                    c.user_id = %s
+                GROUP BY 
+                    c.id, c.title, c.description, c.published_date, c.status, c.type, c.image_cover
+                LIMIT %s 
+                OFFSET %s
                 """
                 offset = (page - 1) * limit
                 cursor.execute(query, (user_id, limit, offset))
                 comics = cursor.fetchall()
-
             comics_result = []
             for comic in comics:
                 published_date = datetime.strftime(comic[3], "%d-%m-%Y") if comic[3] else None
+                author_ids = comic[7]
+                author_names = comic[8]
+                author_data = [
+                    {'id': author_id, 'name': author_name} 
+                    for author_id, author_name in zip(author_ids, author_names)
+                ]
                 comic_data = {
                     'id': comic[0],
                     'title': comic[1],
@@ -54,6 +72,7 @@ class ComicListAPI(Resource):
                     'status': get_comic_status(comic[4]),
                     'type': get_comic_type(comic[5]),
                     'image_cover': get_image_cover_url(app.config, comic[6], user_id, comic[0]),
+                    'authors': author_data,
                 }
                 comics_result.append(comic_data)
 
