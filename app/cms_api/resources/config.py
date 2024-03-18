@@ -11,9 +11,9 @@ authorizations = {
 
 api = Api(
     cms_api_bp,
-    title="Comic API",
+    title="Comic CMS API",
     version='1.0',
-    description="Testing Comic API",
+    description="API for comic cms",
     doc='/docs',
     authorizations=authorizations,
     security='apikey'
