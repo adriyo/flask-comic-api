@@ -5,6 +5,8 @@ from app.config import Config
 from datetime import datetime
 
 def parse_published_date(published_date):
+    if not published_date:
+        return None
     try:
         if '-' in published_date:
             return datetime.strptime(published_date, "%Y-%m-%d").date()

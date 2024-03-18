@@ -161,7 +161,7 @@ class ChapterListAPI(Resource):
                     if title:
                         update_fields.append("title = %s")
                         update_values.append(title)
-                    if title:
+                    if alternative_title:
                         update_fields.append("alternative_title = %s")
                         update_values.append(alternative_title)
                     if description:
@@ -182,14 +182,15 @@ class ChapterListAPI(Resource):
                     
                     update_values.append(comic_id)
 
-                    set_clause = ', '.join(update_fields)                
+                    set_clause = ', '.join(update_fields)  
 
-                    query = f"""
-                        UPDATE comics
-                        SET {set_clause}
-                        WHERE id = %s
-                    """
-                    cursor.execute(query, tuple(update_values))
+                    if update_fields:
+                        query = f"""
+                            UPDATE comics
+                            SET {set_clause}
+                            WHERE id = %s
+                        """
+                        cursor.execute(query, tuple(update_values))
 
                     if genres:
                         cursor.execute("DELETE FROM comic_genres WHERE comic_id = %s", (comic_id,))
