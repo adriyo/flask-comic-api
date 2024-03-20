@@ -248,7 +248,7 @@ class ComicAPI(Resource):
         published_datetime = parse_published_date(published_date)
 
         try:
-            filename = ''
+            filename = None
             if image_cover != None:
                 filename = secure_filename(image_cover.filename)
                 if not allowed_file(filename):
@@ -285,17 +285,18 @@ class ComicAPI(Resource):
                     if translators:
                         translator_values = [(comic_id, translator_id) for translator_id in translators]
                         cursor.executemany("INSERT INTO comic_translators (comic_id, translator_id) VALUES (%s, %s)", translator_values)
-
-                    request_files = {"file": (filename, image_cover)}
-                    request_data = {"user_id": user_id, "comic_id": comic_id}
-                    response = requests.post(
-                        url=STORAGE_SERVICE_UPLOAD_URL, 
-                        files=request_files, 
-                        data=request_data
-                    )
-                    if response.status_code != 200:
-                        connection.rollback()
-                        return make_response({"result": "Failed to upload image"}, 400)
+                   
+                    if filename != None:
+                        request_files = {"file": (filename, image_cover)}
+                        request_data = {"user_id": user_id, "comic_id": comic_id}
+                        response = requests.post(
+                            url=STORAGE_SERVICE_UPLOAD_URL, 
+                            files=request_files, 
+                            data=request_data
+                        )
+                        if response.status_code != 200:
+                            connection.rollback()
+                            return make_response({"result": "Failed to upload image"}, 400)
 
                 connection.commit()
             result = {"message": "Data received successfully"}
