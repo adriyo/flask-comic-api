@@ -15,6 +15,11 @@ def input_parser():
     parser.add_argument('type', location='form', type=int)
     parser.add_argument('description', required=True, help='fill the description', location='form')
     parser.add_argument('image_cover', type=FileStorage, location='files')
+    parser.add_argument('new_authors', action='append', type=str, help='new comic authors name', location='form')
+    parser.add_argument('new_artists', action='append', type=str, help='new comic artists name', location='form')
+    parser.add_argument('new_tags', action='append', type=str, help='new comic tags', location='form')
+    parser.add_argument('new_translators', action='append', type=str, help='new comic translators', location='form')
+    parser.add_argument('new_genres', action='append', type=str, help='new comic genres', location='form')
     return parser
 
 def update_input_parser():

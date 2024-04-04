@@ -245,6 +245,11 @@ class ComicAPI(Resource):
         tags = args['tags']
         translators = args['translators']
         genres = args['genres']
+        new_authors = args['new_authors']
+        new_artists = args['new_artists']
+        new_tags = args['new_tags']
+        new_translators = args['new_translators']
+        new_genres = args['new_genres']
         published_datetime = parse_published_date(published_date)
 
         try:
@@ -285,7 +290,27 @@ class ComicAPI(Resource):
                     if translators:
                         translator_values = [(comic_id, translator_id) for translator_id in translators]
                         cursor.executemany("INSERT INTO comic_translators (comic_id, translator_id) VALUES (%s, %s)", translator_values)
-                   
+                    
+                    if new_authors:
+                        author_values = [(author,) for author in new_authors]
+                        cursor.executemany("INSERT INTO authors (name) VALUES (%s)", author_values)
+                        
+                    if new_genres:
+                        genre_values = [(genre,) for genre in new_genres]
+                        cursor.executemany("INSERT INTO genres (name) VALUES (%s)", genre_values)
+
+                    if new_artists:
+                        artist_values = [(artist,) for artist in new_artists]
+                        cursor.executemany("INSERT INTO artists (name) VALUES (%s)", artist_values)
+
+                    if new_tags:
+                        tag_values = [(tag,) for tag in new_tags]
+                        cursor.executemany("INSERT INTO tags (name) VALUES (%s)", tag_values)
+
+                    if new_translators:
+                        translator_values = [(translator,) for translator in new_translators]
+                        cursor.executemany("INSERT INTO translators (name) VALUES (%s)", translator_values)
+
                     if filename != None:
                         request_files = {"file": (filename, image_cover)}
                         request_data = {"user_id": user_id, "comic_id": comic_id}
