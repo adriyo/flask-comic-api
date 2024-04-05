@@ -1,3 +1,4 @@
+from datetime import datetime
 from flask import jsonify, make_response, g
 from flask_restx import Resource, Namespace
 from werkzeug.utils import secure_filename
@@ -24,7 +25,8 @@ class ChapterListAPI(Resource):
                 query = """
                     SELECT 
                         comic_chapters.id,
-                        comic_chapters.title
+                        comic_chapters.title,
+                        comic_chapters.created_at
                     FROM comics
                     INNER JOIN comic_chapters ON comics.id = comic_chapters.comic_id
                     WHERE comics.user_id = %s AND comics.id = %s
@@ -38,6 +40,7 @@ class ChapterListAPI(Resource):
             {
                 'id': chapter[0],
                 'title': chapter[1],
+                'updated_at': datetime.strftime(chapter[2], "%d-%m-%Y") if chapter[2] else None,
             }
             for chapter in chapters
         ]

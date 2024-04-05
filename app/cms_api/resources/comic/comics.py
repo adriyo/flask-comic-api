@@ -87,18 +87,28 @@ class ComicListAPI(Resource):
 class ChapterListAPI(Resource):
     @auth_required
     def get(self, comic_id):
+        user_id = g.user_id
         with connection:
             with connection.cursor() as cursor:
-                query = "SELECT id, title, description, published_date, status, type, image_cover, user_id FROM comics WHERE id = %s"
-                cursor.execute(query, comic_id)
+                query = """
+                    SELECT 
+                        id, title, description, published_date, status, type, image_cover, user_id 
+                    FROM comics
+                    WHERE 
+                        id = %s
+                    AND
+                        user_id = %s
+                """
+                cursor.execute(query, (comic_id, user_id))
                 comic = cursor.fetchone()
         if comic == None:
             return make_response(jsonify({'message': 'comic not found'}), 404)
+        published_date = datetime.strftime(comic[3], "%d-%m-%Y") if comic[3] else None
         result = {
             'id': comic[0],
             'title': comic[1],
             'description': comic[2],
-            'published_date': comic[3],
+            'published_date': published_date,
             'status': get_comic_status(comic[4]),
             'type': get_comic_type(comic[5]),
             'image_cover': get_image_cover_url(app.config, comic[6], comic[7], comic[0]),
