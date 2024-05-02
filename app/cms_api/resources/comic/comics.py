@@ -38,13 +38,15 @@ class ComicListAPI(Resource):
                 SELECT 
                     c.id, c.title, c.description, c.published_date, c.status, c.type, c.image_cover,
                     COALESCE(array_agg(a.id) FILTER (WHERE a.id IS NOT NULL), '{}') as author_ids,
-                    COALESCE(array_agg(a.name) FILTER (WHERE a.name IS NOT NULL), '{}') as author_names
+                    COALESCE(array_agg(a.name) FILTER (WHERE a.name IS NOT NULL), '{}') as author_names,
+                    COALESCE(array_agg(tag.id) FILTER (WHERE tag.id IS NOT NULL), '{}') as tag_ids,
+                    COALESCE(array_agg(tag.name) FILTER (WHERE tag.name IS NOT NULL), '{}') as tag_names
                 FROM 
                     comics c 
-                LEFT JOIN 
-                    comic_authors ca ON c.id = ca.comic_id
-                LEFT JOIN 
-                    authors a ON ca.author_id = a.id
+                LEFT JOIN comic_authors ca ON c.id = ca.comic_id
+                LEFT JOIN authors a ON ca.author_id = a.id
+                LEFT JOIN comic_tags ct ON c.id = ct.comic_id
+                LEFT JOIN tags tag ON ca.author_id = tag.id
                 WHERE
                     c.user_id = %s
                 GROUP BY 
@@ -64,6 +66,10 @@ class ComicListAPI(Resource):
                     {'id': author_id, 'name': author_name} 
                     for author_id, author_name in zip(author_ids, author_names)
                 ]
+                tag_data = [
+                    {'id': tag_id, 'name': tag_name} 
+                    for tag_id, tag_name in zip(comic[9], comic[10])
+                ]
                 comic_data = {
                     'id': comic[0],
                     'title': comic[1],
@@ -71,6 +77,7 @@ class ComicListAPI(Resource):
                     'published_date': published_date,
                     'status': get_comic_status(comic[4]),
                     'type': get_comic_type(comic[5]),
+                    'tags': tag_data,
                     'image_cover': get_image_cover_url(app.config, comic[6], user_id, comic[0]),
                     'authors': author_data,
                 }
@@ -92,26 +99,93 @@ class ChapterListAPI(Resource):
             with connection.cursor() as cursor:
                 query = """
                     SELECT 
-                        id, title, description, published_date, status, type, image_cover, user_id 
-                    FROM comics
-                    WHERE 
-                        id = %s
-                    AND
-                        user_id = %s
+                        c.id, c.title, c.description, c.published_date, c.status, c.type, c.image_cover, c.user_id, c.alternative_title,
+                        COALESCE(author_ids, '{}') as author_ids,
+                        COALESCE(author_names, '{}') as author_names,
+                        COALESCE(tag_ids, '{}') as tag_ids,
+                        COALESCE(tag_names, '{}') as tag_names,
+                        COALESCE(genre_ids, '{}') as genre_ids,
+                        COALESCE(genre_names, '{}') as genre_names, 
+                        COALESCE(artist_ids, '{}') as artist_ids,
+                        COALESCE(artist_names, '{}') as artist_names, 
+                        COALESCE(translator_ids, '{}') as translator_ids,
+                        COALESCE(translator_names, '{}') as translator_names 
+                    FROM 
+                        comics c 
+                    LEFT JOIN (
+                        SELECT comic_id, array_agg(author.id) as author_ids, array_agg(author.name) as author_names
+                        FROM comic_authors
+                        LEFT JOIN authors author ON comic_authors.author_id = author.id
+                        GROUP BY comic_id
+                    ) author_agg ON c.id = author_agg.comic_id
+                    LEFT JOIN (
+                        SELECT comic_id, array_agg(tag.id) as tag_ids, array_agg(tag.name) as tag_names
+                        FROM comic_tags
+                        LEFT JOIN tags tag ON comic_tags.tag_id = tag.id
+                        GROUP BY comic_id
+                    ) tag_agg ON c.id = tag_agg.comic_id
+                    LEFT JOIN (
+                        SELECT comic_id, array_agg(genre.id) as genre_ids, array_agg(genre.name) as genre_names
+                        FROM comic_genres
+                        LEFT JOIN genres genre ON comic_genres.genre_id = genre.id
+                        GROUP BY comic_id
+                    ) genre_agg ON c.id = genre_agg.comic_id
+                    LEFT JOIN (
+                        SELECT comic_id, array_agg(artist.id) as artist_ids, array_agg(artist.name) as artist_names
+                        FROM comic_artists
+                        LEFT JOIN artists artist ON comic_artists.artist_id = artist.id
+                        GROUP BY comic_id
+                    ) artist_agg ON c.id = artist_agg.comic_id
+                    LEFT JOIN (
+                        SELECT comic_id, array_agg(translator.id) as translator_ids, array_agg(translator.name) as translator_names
+                        FROM comic_translators
+                        LEFT JOIN translators translator ON comic_translators.translator_id = translator.id
+                        GROUP BY comic_id
+                    ) translator_agg ON c.id = translator_agg.comic_id
+                    WHERE
+                        c.id = %s
+                        AND c.user_id = %s
                 """
+                
                 cursor.execute(query, (comic_id, user_id))
                 comic = cursor.fetchone()
         if comic == None:
             return make_response(jsonify({'message': 'comic not found'}), 404)
         published_date = datetime.strftime(comic[3], "%d-%m-%Y") if comic[3] else None
+        author_data = [
+            {'id': author_id, 'name': author_name} 
+            for author_id, author_name in zip(comic[9], comic[10])
+        ]
+        tag_data = [
+            {'id': tag_id, 'name': tag_name} 
+            for tag_id, tag_name in zip(comic[11], comic[12])
+        ]
+        genre_data = [
+            {'id': genre_id, 'name': genre_name} 
+            for genre_id, genre_name in zip(comic[13], comic[14])
+        ]
+        artist_data = [
+            {'id': artist_id, 'name': artist_name} 
+            for artist_id, artist_name in zip(comic[15], comic[16])
+        ]
+        translator_data = [
+            {'id': translator_id, 'name': translator_name} 
+            for translator_id, translator_name in zip(comic[17], comic[18])
+        ]
         result = {
             'id': comic[0],
             'title': comic[1],
+            'alternative_title': comic[8],
             'description': comic[2],
             'published_date': published_date,
             'status': get_comic_status(comic[4]),
             'type': get_comic_type(comic[5]),
-            'image_cover': get_image_cover_url(app.config, comic[6], comic[7], comic[0]),
+            'tags': tag_data,
+            'authors': author_data,
+            'genres': genre_data,
+            'artists': artist_data, 
+            'translators': translator_data, 
+            'image_cover': get_image_cover_url(config=app.config, filename=comic[6], user_id=comic[7], comic_id=comic[0]),
         }
         return make_response(jsonify(result), 200)
     

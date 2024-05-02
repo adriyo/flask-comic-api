@@ -19,19 +19,21 @@ def get_config_env(config):
 
 def get_comic_type(type):
     comic_types = {
-        0: 'manga',
-        1: 'manhwa',
-        2: 'manhua',
+        0: {'id': 0, 'name': 'manga',},
+        1: {'id': 1, 'name': 'manhwa',},
+        2: {'id': 2, 'name': 'manhua',},
+        3: {'id': 3, 'name': 'webtoon',},
     }
-    return comic_types.get(type, 'Unknown')
+    return comic_types.get(type, {'id': type, 'name': 'Unknown'})
 
 def get_comic_status(type):
     comic_status = {
-        0: 'ongoing',
-        1: 'completed',
-        2: 'hiatus',
+        0: {'id': 0, 'name': 'ongoing',},
+        1: {'id': 1, 'name': 'completed',},
+        2: {'id': 2, 'name': 'hiatus',},
     }
-    return comic_status.get(type, 'Unknown')
+    return comic_status.get(type, {'id': type, 'name': 'Unknown'})
+
 def get_host_url(config) -> str:
     if get_config_env(config) == 'development':
         return f'{request.url_root}'
