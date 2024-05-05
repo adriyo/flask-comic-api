@@ -13,7 +13,6 @@ from app.cms_api.parser import comic
 from app.config import app
 
 comicInputParser = comic.input_parser()
-comicUpdateInputParser = comic.update_input_parser()
 
 ns = Namespace('comics')
 
@@ -36,21 +35,51 @@ class ComicListAPI(Resource):
 
                 query = """
                 SELECT 
-                    c.id, c.title, c.description, c.published_date, c.status, c.type, c.image_cover,
-                    COALESCE(array_agg(a.id) FILTER (WHERE a.id IS NOT NULL), '{}') as author_ids,
-                    COALESCE(array_agg(a.name) FILTER (WHERE a.name IS NOT NULL), '{}') as author_names,
-                    COALESCE(array_agg(tag.id) FILTER (WHERE tag.id IS NOT NULL), '{}') as tag_ids,
-                    COALESCE(array_agg(tag.name) FILTER (WHERE tag.name IS NOT NULL), '{}') as tag_names
+                    c.id, c.title, c.description, c.published_date, c.status, c.type, c.image_cover, c.user_id, c.alternative_title,
+                    COALESCE(author_ids, '{}') as author_ids,
+                    COALESCE(author_names, '{}') as author_names,
+                    COALESCE(tag_ids, '{}') as tag_ids,
+                    COALESCE(tag_names, '{}') as tag_names,
+                    COALESCE(genre_ids, '{}') as genre_ids,
+                    COALESCE(genre_names, '{}') as genre_names, 
+                    COALESCE(artist_ids, '{}') as artist_ids,
+                    COALESCE(artist_names, '{}') as artist_names, 
+                    COALESCE(translator_ids, '{}') as translator_ids,
+                    COALESCE(translator_names, '{}') as translator_names 
                 FROM 
                     comics c 
-                LEFT JOIN comic_authors ca ON c.id = ca.comic_id
-                LEFT JOIN authors a ON ca.author_id = a.id
-                LEFT JOIN comic_tags ct ON c.id = ct.comic_id
-                LEFT JOIN tags tag ON ca.author_id = tag.id
+                LEFT JOIN (
+                    SELECT comic_id, array_agg(author.id) as author_ids, array_agg(author.name) as author_names
+                    FROM comic_authors
+                    LEFT JOIN authors author ON comic_authors.author_id = author.id
+                    GROUP BY comic_id
+                ) author_agg ON c.id = author_agg.comic_id
+                LEFT JOIN (
+                    SELECT comic_id, array_agg(tag.id) as tag_ids, array_agg(tag.name) as tag_names
+                    FROM comic_tags
+                    LEFT JOIN tags tag ON comic_tags.tag_id = tag.id
+                    GROUP BY comic_id
+                ) tag_agg ON c.id = tag_agg.comic_id
+                LEFT JOIN (
+                    SELECT comic_id, array_agg(genre.id) as genre_ids, array_agg(genre.name) as genre_names
+                    FROM comic_genres
+                    LEFT JOIN genres genre ON comic_genres.genre_id = genre.id
+                    GROUP BY comic_id
+                ) genre_agg ON c.id = genre_agg.comic_id
+                LEFT JOIN (
+                    SELECT comic_id, array_agg(artist.id) as artist_ids, array_agg(artist.name) as artist_names
+                    FROM comic_artists
+                    LEFT JOIN artists artist ON comic_artists.artist_id = artist.id
+                    GROUP BY comic_id
+                ) artist_agg ON c.id = artist_agg.comic_id
+                LEFT JOIN (
+                    SELECT comic_id, array_agg(translator.id) as translator_ids, array_agg(translator.name) as translator_names
+                    FROM comic_translators
+                    LEFT JOIN translators translator ON comic_translators.translator_id = translator.id
+                    GROUP BY comic_id
+                ) translator_agg ON c.id = translator_agg.comic_id
                 WHERE
                     c.user_id = %s
-                GROUP BY 
-                    c.id, c.title, c.description, c.published_date, c.status, c.type, c.image_cover
                 LIMIT %s 
                 OFFSET %s
                 """
@@ -60,26 +89,40 @@ class ComicListAPI(Resource):
             comics_result = []
             for comic in comics:
                 published_date = datetime.strftime(comic[3], "%d-%m-%Y") if comic[3] else None
-                author_ids = comic[7]
-                author_names = comic[8]
                 author_data = [
                     {'id': author_id, 'name': author_name} 
-                    for author_id, author_name in zip(author_ids, author_names)
+                    for author_id, author_name in zip(comic[9], comic[10])
                 ]
                 tag_data = [
                     {'id': tag_id, 'name': tag_name} 
-                    for tag_id, tag_name in zip(comic[9], comic[10])
+                    for tag_id, tag_name in zip(comic[11], comic[12])
+                ]
+                genre_data = [
+                    {'id': genre_id, 'name': genre_name} 
+                    for genre_id, genre_name in zip(comic[13], comic[14])
+                ]
+                artist_data = [
+                    {'id': artist_id, 'name': artist_name} 
+                    for artist_id, artist_name in zip(comic[15], comic[16])
+                ]
+                translator_data = [
+                    {'id': translator_id, 'name': translator_name} 
+                    for translator_id, translator_name in zip(comic[17], comic[18])
                 ]
                 comic_data = {
                     'id': comic[0],
                     'title': comic[1],
+                    'alternative_title': comic[8],
                     'description': comic[2],
                     'published_date': published_date,
                     'status': get_comic_status(comic[4]),
                     'type': get_comic_type(comic[5]),
                     'tags': tag_data,
-                    'image_cover': get_image_cover_url(app.config, comic[6], user_id, comic[0]),
                     'authors': author_data,
+                    'genres': genre_data,
+                    'artists': artist_data, 
+                    'translators': translator_data, 
+                    'image_cover': get_image_cover_url(app.config, comic[6], user_id, comic[0]),
                 }
                 comics_result.append(comic_data)
 
@@ -189,11 +232,11 @@ class ChapterListAPI(Resource):
         }
         return make_response(jsonify(result), 200)
     
-    @ns.expect(comicUpdateInputParser)
+    @ns.expect(comicInputParser)
     @auth_required
     def put(self, comic_id):
         user_id = g.user_id
-        args = comicUpdateInputParser.parse_args()
+        args = comicInputParser.parse_args()
 
         title = args['title']
         alternative_title = args['alternative_title']
@@ -207,6 +250,11 @@ class ChapterListAPI(Resource):
         tags = args['tags']
         translators = args['translators']
         genres = args['genres']
+        new_authors = args['new_authors']
+        new_artists = args['new_artists']
+        new_tags = args['new_tags']
+        new_translators = args['new_translators']
+        new_genres = args['new_genres']
         published_datetime = parse_published_date(published_date)
 
         if all(value is None for value in args.values()):
@@ -300,6 +348,61 @@ class ChapterListAPI(Resource):
                         cursor.execute("DELETE FROM comic_translators WHERE comic_id = %s", (comic_id,))
                         translator_values = [(comic_id, translator_id) for translator_id in translators]
                         cursor.executemany("INSERT INTO comic_translators (comic_id, translator_id) VALUES (%s, %s)", translator_values)
+
+                    if new_authors:
+                        author_values = [(author,) for author in new_authors]
+                        new_author_ids = []
+                        for author in new_authors:
+                            cursor.execute("INSERT INTO authors (name) VALUES (%s) RETURNING id", (author,))
+                            new_author_ids.append(cursor.fetchone()[0])
+
+                        if new_author_ids:
+                            new_author_values = [(comic_id, new_author_id) for new_author_id in new_author_ids]
+                            cursor.executemany("INSERT INTO comic_authors (comic_id, author_id) VALUES (%s, %s)", new_author_values)
+                            
+                    if new_genres:
+                        genre_values = [(genre,) for genre in new_genres]
+                        new_genre_ids = []
+                        for genre in new_genres:
+                            cursor.execute("INSERT INTO genres (name) VALUES (%s) RETURNING id", (genre,))
+                            new_genre_ids.append(cursor.fetchone()[0])
+
+                        if new_genre_ids:
+                            new_genre_values = [(comic_id, new_genre_id) for new_genre_id in new_genre_ids]
+                            cursor.executemany("INSERT INTO comic_genres (comic_id, genre_id) VALUES (%s, %s)", new_genre_values)
+
+                    if new_artists:
+                        artist_values = [(artist,) for artist in new_artists]
+                        new_artist_ids = []
+                        for artist in new_artists:
+                            cursor.execute("INSERT INTO artists (name) VALUES (%s) RETURNING id", (artist,))
+                            new_artist_ids.append(cursor.fetchone()[0])
+
+                        if new_artist_ids:
+                            new_artist_values = [(comic_id, new_artist_id) for new_artist_id in new_artist_ids]
+                            cursor.executemany("INSERT INTO comic_artists (comic_id, artist_id) VALUES (%s, %s)", new_artist_values)
+
+                    if new_tags:
+                        tag_values = [(tag,) for tag in new_tags]
+                        new_tag_ids = []
+                        for tag in new_tags:
+                            cursor.execute("INSERT INTO tags (name) VALUES (%s) RETURNING id", (tag,))
+                            new_tag_ids.append(cursor.fetchone()[0])
+                        
+                        if new_tag_ids:
+                            new_tag_values = [(comic_id, new_tag_id) for new_tag_id in new_tag_ids]
+                            cursor.executemany("INSERT INTO comic_tags (comic_id, tag_id) VALUES (%s, %s)", new_tag_values)
+
+                    if new_translators:
+                        translator_values = [(translator,) for translator in new_translators]
+                        new_translator_ids = []
+                        for translator in new_translators:
+                            cursor.execute("INSERT INTO translators (name) VALUES (%s) RETURNING id", (translator,))
+                            new_translator_ids.append(cursor.fetchone()[0])
+
+                        if new_translator_ids:
+                            new_translator_values = [(comic_id, new_translator_id) for new_translator_id in new_translator_ids]
+                            cursor.executemany("INSERT INTO comic_translators (comic_id, translator_id) VALUES (%s, %s)", new_translator_values)
                     
                     connection.commit()
         
@@ -377,23 +480,59 @@ class ComicAPI(Resource):
                     
                     if new_authors:
                         author_values = [(author,) for author in new_authors]
-                        cursor.executemany("INSERT INTO authors (name) VALUES (%s)", author_values)
-                        
+                        new_author_ids = []
+                        for author in new_authors:
+                            cursor.execute("INSERT INTO authors (name) VALUES (%s) RETURNING id", (author,))
+                            new_author_ids.append(cursor.fetchone()[0])
+
+                        if new_author_ids:
+                            new_author_values = [(comic_id, new_author_id) for new_author_id in new_author_ids]
+                            cursor.executemany("INSERT INTO comic_authors (comic_id, author_id) VALUES (%s, %s)", new_author_values)
+                            
+
                     if new_genres:
                         genre_values = [(genre,) for genre in new_genres]
-                        cursor.executemany("INSERT INTO genres (name) VALUES (%s)", genre_values)
+                        new_genre_ids = []
+                        for genre in new_genres:
+                            cursor.execute("INSERT INTO genres (name) VALUES (%s) RETURNING id", (genre,))
+                            new_genre_ids.append(cursor.fetchone()[0])
+
+                        if new_genre_ids:
+                            new_genre_values = [(comic_id, new_genre_id) for new_genre_id in new_genre_ids]
+                            cursor.executemany("INSERT INTO comic_genres (comic_id, genre_id) VALUES (%s, %s)", new_genre_values)
 
                     if new_artists:
                         artist_values = [(artist,) for artist in new_artists]
-                        cursor.executemany("INSERT INTO artists (name) VALUES (%s)", artist_values)
+                        new_artist_ids = []
+                        for artist in new_artists:
+                            cursor.execute("INSERT INTO artists (name) VALUES (%s) RETURNING id", (artist,))
+                            new_artist_ids.append(cursor.fetchone()[0])
+
+                        if new_artist_ids:
+                            new_artist_values = [(comic_id, new_artist_id) for new_artist_id in new_artist_ids]
+                            cursor.executemany("INSERT INTO comic_artists (comic_id, artist_id) VALUES (%s, %s)", new_artist_values)
 
                     if new_tags:
                         tag_values = [(tag,) for tag in new_tags]
-                        cursor.executemany("INSERT INTO tags (name) VALUES (%s)", tag_values)
+                        new_tag_ids = []
+                        for tag in new_tags:
+                            cursor.execute("INSERT INTO tags (name) VALUES (%s) RETURNING id", (tag,))
+                            new_tag_ids.append(cursor.fetchone()[0])
+                        
+                        if new_tag_ids:
+                            new_tag_values = [(comic_id, new_tag_id) for new_tag_id in new_tag_ids]
+                            cursor.executemany("INSERT INTO comic_tags (comic_id, tag_id) VALUES (%s, %s)", new_tag_values)
 
                     if new_translators:
                         translator_values = [(translator,) for translator in new_translators]
-                        cursor.executemany("INSERT INTO translators (name) VALUES (%s)", translator_values)
+                        new_translator_ids = []
+                        for translator in new_translators:
+                            cursor.execute("INSERT INTO translators (name) VALUES (%s) RETURNING id", (translator,))
+                            new_translator_ids.append(cursor.fetchone()[0])
+
+                        if new_translator_ids:
+                            new_translator_values = [(comic_id, new_translator_id) for new_translator_id in new_translator_ids]
+                            cursor.executemany("INSERT INTO comic_translators (comic_id, translator_id) VALUES (%s, %s)", new_translator_values)
 
                     if filename != None:
                         request_files = {"file": (filename, image_cover)}
