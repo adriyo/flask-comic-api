@@ -172,7 +172,10 @@ class ChapterUpdateAPI(Resource):
 
         title = args['title']
         images = args['images']
-        image_ids = args['image_ids']
+        image_ids = args['deleted_image_ids']
+
+        if title == None and images == None and image_ids == None:
+            return make_response(jsonify({'message': 'none to update'}), 400)
 
         try:
             with connection:
@@ -187,21 +190,30 @@ class ChapterUpdateAPI(Resource):
                     query = "UPDATE comic_chapters SET title = %s WHERE id = %s"
                     cursor.execute(query, (title, chapterId))
 
-                    for image, image_id in zip(images, image_ids):
-                        filename = secure_filename(image.filename)
-                        query = "UPDATE chapter_images SET image = %s WHERE id = %s AND chapter_id = %s"
-                        cursor.execute(query, (filename, image_id, chapterId))
+                    if image_ids and len(image_ids) > 0:
+                        for image_id in image_ids:
+                            query = "DELETE FROM chapter_images WHERE id = %s AND chapter_id = %s"
+                            cursor.execute(query, (image_id, chapterId))
 
-                        request_files = {"file": (filename, image)}
-                        request_data = {"user_id": user_id, "comic_id": comicId, "chapter_id": chapterId}
-                        response = requests.post(
-                            url=STORAGE_SERVICE_UPLOAD_URL,
-                            files=request_files, 
-                            data=request_data)
-                        if response.status_code != 200:
-                            connection.rollback()
-                            return make_response({"result": "Failed to upload image"}, 400)
-                        
+                    if images and len(images) > 0:
+                        for image in images:
+                            filename = secure_filename(image.filename)
+                            query = "INSERT INTO chapter_images (chapter_id, image) VALUES (%s, %s)"
+                            cursor.execute(query, (chapterId, filename))
+                            
+                            if cursor.rowcount == 0:
+                                connection.rollback()
+                                return make_response(jsonify({'message': 'failed to upload'}), 404)
+
+                            request_files = {"file": (filename, image)}
+                            request_data = {"user_id": user_id, "comic_id": comicId, "chapter_id": chapterId}
+                            response = requests.post(
+                                url=STORAGE_SERVICE_UPLOAD_URL, 
+                                files=request_files,
+                                data=request_data)
+                            if response.status_code != 200:
+                                connection.rollback()
+                                return make_response({"result": "Failed to upload image"}, 400)
                 connection.commit()
             return make_response(jsonify({'message': 'success'}), 200)
         except Exception as e:
