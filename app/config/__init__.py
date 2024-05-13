@@ -31,9 +31,16 @@ config_dict = {
     'production': ProductionConfig
 }
 
-app = Flask(__name__)
-CORS(app)
-ma = Marshmallow(app)
-app.config.from_object(config_dict[f'{os.environ['FLASK_ENV']}'])
-excel.init_excel(app)
+def create_app():
+    app = Flask(__name__)
+    CORS(app)
+    app.config.from_object(config_dict[f'{os.environ['FLASK_ENV']}'])
+    excel.init_excel(app)
+
+    from app.cms_api import cms_api_bp
+    app.register_blueprint(cms_api_bp)
+    return app
+
+app = create_app()
 mail = Mail(app)
+ma = Marshmallow(app)

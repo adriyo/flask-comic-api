@@ -1,12 +1,11 @@
 from datetime import datetime
-from flask import jsonify, make_response, g
+from flask import jsonify, make_response, g, current_app
 from flask_restx import Resource, Namespace
 from werkzeug.utils import secure_filename
 from app.cms_api.auth import auth_required
 from app.cms_api.constants import STORAGE_SERVICE_UPLOAD_URL
 from app.cms_api.resources.helper import get_chapter_image_url, get_image_cover_url
 from app.config.db import connection
-from app.config import app
 import requests
 from app.cms_api.parser import chapter
 
@@ -85,7 +84,7 @@ class ComicChapterDetailAPI(Resource):
                 'images': [
                     {
                         'id':image[2],
-                        'url':get_chapter_image_url(app.config, image[1], user_id, comicId, chapterId)
+                        'url':get_chapter_image_url(current_app.config, image[1], user_id, comicId, chapterId)
                     }
                     for image in comic
                 ]
@@ -110,7 +109,7 @@ class ChapterImagesAPI(Resource):
                 'title': comic[1],
                 'description': comic[2],
                 'published_date': comic[3],
-                'image_cover': get_image_cover_url(app.config, comic[4], user_id, comic[0]),
+                'image_cover': get_image_cover_url(current_app.config, comic[4], user_id, comic[0]),
             }
         return make_response(jsonify(result), 200)
 

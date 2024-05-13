@@ -1,7 +1,7 @@
-from flask import jsonify, render_template
+from flask import jsonify, render_template, current_app
 from app.config.db import connection
 from app.cms_api.resources.helper import get_host_url, get_config_env
-from app.config import Config, mail, app
+from app.config import Config, mail
 from flask_mail import Message
 import bcrypt
 import base64
@@ -33,9 +33,9 @@ class UserService():
                         .decode('utf-8')
                     
                     result = None
-                    confirm_url = f'{get_host_url(app.config)}{Config.CMS_API_PREFIX}/user/confirm/{string_token}'
+                    confirm_url = f'{get_host_url(current_app.config)}{Config.CMS_API_PREFIX}/user/confirm/{string_token}'
                     message = 'User registered successfully, please check your email for confirmation'
-                    if get_config_env(app.config) == 'production':  
+                    if get_config_env(current_app.config) == 'production':  
                         msg = Message(
                             subject='Confirmation',
                             sender=Config.MAIL_USERNAME,

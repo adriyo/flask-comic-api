@@ -1,6 +1,6 @@
 from datetime import datetime
 import os
-from flask import jsonify, make_response, g, request
+from flask import jsonify, make_response, g, request, current_app
 from flask_restx import Namespace, Resource
 from psycopg2 import DatabaseError 
 from app.cms_api.auth import auth_required
@@ -10,7 +10,6 @@ from app.cms_api.resources.helper import allowed_file, parse_published_date, get
 from app.config.db import connection
 from werkzeug.utils import secure_filename
 from app.cms_api.parser import comic
-from app.config import app
 
 comicInputParser = comic.input_parser()
 
@@ -122,7 +121,7 @@ class ComicListAPI(Resource):
                     'genres': genre_data,
                     'artists': artist_data, 
                     'translators': translator_data, 
-                    'image_cover': get_image_cover_url(app.config, comic[6], user_id, comic[0]),
+                    'image_cover': get_image_cover_url(current_app.config, comic[6], user_id, comic[0]),
                 }
                 comics_result.append(comic_data)
 
@@ -228,7 +227,7 @@ class ChapterListAPI(Resource):
             'genres': genre_data,
             'artists': artist_data, 
             'translators': translator_data, 
-            'image_cover': get_image_cover_url(config=app.config, filename=comic[6], user_id=comic[7], comic_id=comic[0]),
+            'image_cover': get_image_cover_url(config=current_app.config, filename=comic[6], user_id=comic[7], comic_id=comic[0]),
         }
         return make_response(jsonify(result), 200)
     
