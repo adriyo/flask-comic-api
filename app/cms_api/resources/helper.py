@@ -37,7 +37,7 @@ def get_comic_status(type):
 def get_host_url(config) -> str:
     if get_config_env(config) == 'development':
         return f'{request.url_root}'
-    return f'{request.headers.get('X-Original-URL')}/'
+    return f"{request.headers.get('X-Original-URL')}/"
 
 def get_image_cover_url(config, filename, user_id, comic_id):
     if not filename:

@@ -34,7 +34,8 @@ config_dict = {
 def create_app():
     app = Flask(__name__)
     CORS(app)
-    app.config.from_object(config_dict[f'{os.environ['FLASK_ENV']}'])
+    app_env = f"{os.environ['FLASK_ENV']}"
+    app.config.from_object(config_dict[app_env])
     excel.init_excel(app)
 
     from app.cms_api import cms_api_bp
